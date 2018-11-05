@@ -1,0 +1,60 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion 25
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 25
+        versionCode 1
+        versionName "1.0"
+
+        ndk {
+            // Specifies the ABI configurations of your native
+            // libraries Gradle should build and package with your APK.
+//            abiFilters 'armeabi', 'x86', 'armeabi-v7a'/*, 'arm64-v8a', 'x86_64'*/
+//            abiFilters 'armeabi'// 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64', 'mips', 'mips64'
+              abiFilters 'armeabi', 'x86', 'armeabi-v7a', 'arm64-v8a'
+        }
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_PLATFORM=android-16'
+                cppFlags '-std=c++11'
+            }
+        }
+        buildTypes {
+
+            release {
+                jniDebuggable false
+                minifyEnabled false
+                zipAlignEnabled true
+            }
+
+            debug {
+                jniDebuggable true
+                minifyEnabled false
+                zipAlignEnabled true
+            }
+
+        }
+    }
+
+
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+}
+repositories {
+    mavenCentral()
+}
+
+
+
