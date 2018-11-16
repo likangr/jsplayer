@@ -35,6 +35,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         setContentView(R.layout.activity_simple_video);
 
         mPlayer = (JSPlayer) findViewById(R.id.jsplayer);
+        JSPlayer.setLogFileSavePath(Environment.getExternalStorageDirectory().getPath() + File.separator + "simple_video_log.txt");
 //        mPlayer.setUrl("http://live.hkstv.hk.lxdns.com/live/hks/playlist.m3u8");
 //        mPlayer.setUrl("http://221.120.177.59/hls/i3d7ragr.m3u8");
 //        mPlayer.setUrl("http://58.221.254.33:1935/live/zhongwen.sdp/playlist.m3u8");
@@ -58,8 +59,9 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl("http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4");
 //        mPlayer.setUrl("http://v.ysbang.cn//data/video/2015/rkb/2015rkb01.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "diezhongdie.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
-        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
+        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
+
 
         mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_HW);
         mPlayer.prepare();
@@ -120,7 +122,8 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     @Override
     public void onPrepared(JSPlayer player) {
-        player.play();
+        if (!player.isWantToPause())
+            player.play();
     }
 
     @Override

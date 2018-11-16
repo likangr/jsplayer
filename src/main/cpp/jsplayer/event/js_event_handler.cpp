@@ -20,13 +20,11 @@ JSEventHandler::~JSEventHandler() {
 void JSEventHandler::call_on_intercepted_pcm_data(uint8_t *pcm_data, int len,
                                                   int channel_num) {//fixme func pointer.
 
-
     int sample_num = len / 2;
     LOGE("%s sample_num=%d,channel_num=%d", __func__,
          sample_num, channel_num);
 
     if (m_native_js_player->m_native_intercepted_pcm_data_callback) {
-
         m_native_js_player->m_native_intercepted_pcm_data_callback((jlong) m_native_js_player,
                                                                    (short *) pcm_data,
                                                                    sample_num,

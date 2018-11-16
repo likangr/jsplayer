@@ -19,15 +19,15 @@ JSEglRenderer::~JSEglRenderer() {
     pthread_mutex_destroy(&m_mutex);
     pthread_cond_destroy(&m_start_render_cond);
     pthread_cond_destroy(&m_create_surface_cond);
-
 }
 
 
-void JSEglRenderer::release_egl() {
-    if (m_texture_yuv[TEXY]) {
+void JSEglRenderer::release() {
+    if (m_texture_yuv[0]) {
         glDeleteTextures(3, m_texture_yuv);
+        memset(m_texture_yuv, 0, sizeof(m_texture_yuv));
     }
-    if (m_g_program != 0) {
+    if (m_g_program) {
         glDeleteProgram(m_g_program);
         m_g_program = 0;
     }
@@ -46,9 +46,7 @@ void JSEglRenderer::release_egl() {
         eglTerminate(m_display);
         m_display = NULL;
     }
-
 }
-
 
 void *render_thread(void *data) {
     pthread_setname_np(pthread_self(), __func__);
@@ -57,7 +55,7 @@ void *render_thread(void *data) {
     if (!renderer->m_is_renderer_thread_running) {
         goto end;
     }
-    if (renderer->egl_setup() == JS_ERR) {
+    if (renderer->egl_setup() != JS_OK) {
         LOGE("JSEglRenderer failed to egl_setup");
         goto fail;
     }
@@ -90,30 +88,19 @@ void *render_thread(void *data) {
             }
         }
 
-        if (renderer->m_is_need_update_surface) {
+        if (renderer->m_has_new_surface) {
 
-            if (renderer->m_surface) {// already exits surface.do destroy.
+            if (renderer->m_surface) {
                 eglMakeCurrent(renderer->m_display, 0, 0, 0);
+                glDeleteTextures(3, renderer->m_texture_yuv);
+                memset(renderer->m_texture_yuv, 0, sizeof(renderer->m_texture_yuv));
+                glDeleteProgram(renderer->m_g_program);
+                renderer->m_g_program = 0;
                 eglDestroySurface(renderer->m_display, renderer->m_surface);
                 renderer->m_surface = NULL;
-                glDeleteTextures(3, renderer->m_texture_yuv);
-                glDeleteProgram(renderer->m_g_program);
-                memset(renderer->m_texture_yuv, 0, sizeof(renderer->m_texture_yuv));
-                renderer->m_g_program = 0;
             }
 
-
-            int ret = ANativeWindow_setBuffersGeometry(
-                    renderer->m_native_window,//fixme picture widht / height ??
-                    renderer->m_picture_width,
-                    renderer->m_picture_height,
-                    renderer->m_format);
-            if (ret) {
-                LOGE("[EGL] ANativeWindow_setBuffersGeometry(format) returned error %d", ret);
-                goto fail;
-            }
-
-            if (!(renderer->m_surface = eglCreateWindowSurface(renderer->m_display,//fixme 在这里崩溃过。
+            if (!(renderer->m_surface = eglCreateWindowSurface(renderer->m_display,
                                                                renderer->m_config,
                                                                renderer->m_native_window,
                                                                0))) {
@@ -127,30 +114,60 @@ void *render_thread(void *data) {
                 goto fail;
             }
 
-            if (renderer->init_renderer() == JS_ERR) {
+            //fixme 0,0
+            int ret = ANativeWindow_setBuffersGeometry(
+                    renderer->m_native_window,
+                    0,
+                    0,
+                    renderer->m_format);
+            if (ret) {
+                LOGE("ANativeWindow_setBuffersGeometry(format) returned error %d", ret);
+                goto fail;
+            }
+
+
+            int window_width = ANativeWindow_getWidth(renderer->m_native_window);
+            int window_height = ANativeWindow_getHeight(renderer->m_native_window);
+
+            if (window_width != renderer->m_window_width ||
+                window_height != renderer->m_window_height) {
+
+                renderer->m_window_width = window_width;
+                renderer->m_window_height = window_height;
+
+                LOGD("glViewport m_window_width=%d,m_window_height=%d",
+                     renderer->m_window_width,
+                     renderer->m_window_height);
+
+                glViewport(0, 0, renderer->m_window_width, renderer->m_window_height);
+            }
+
+            if (renderer->init_renderer() != JS_OK) {
                 LOGE("JSEglRenderer failed to init_renderer");
                 goto fail;
             }
 
-            renderer->m_is_need_update_surface = false;
+            renderer->m_has_new_surface = false;
         }
 
-        if (renderer->m_is_window_size_changed) {
-            glViewport(0, 0, renderer->m_picture_width,
-                       renderer->m_picture_height);//fixme picture widht / height ??
-            LOGD("glViewport m_window_width=%d,m_window_height=%d",
-                 renderer->m_window_width,
-                 renderer->m_window_height
-            );
-            renderer->m_is_window_size_changed = false;
-        }
+//        if (renderer->m_is_window_size_changed) {
+//            LOGD("glViewport m_window_width=%d,m_window_height=%d",
+//                 renderer->m_window_width,
+//                 renderer->m_window_height);
+//
+//            glViewport(0, 0, renderer->m_window_width,
+//                       renderer->m_window_height);
+//            renderer->m_is_window_size_changed = false;
+//        }
+
         pthread_mutex_unlock(&renderer->m_mutex);
+
         (*renderer->m_egl_buffer_queue_callback)(renderer->m_callback_data);
     }
 
 
     end:
-    renderer->release_egl();
+    renderer->release();
     if (renderer->m_native_window) {
         ANativeWindow_release(renderer->m_native_window);
         renderer->m_native_window = NULL;
@@ -159,9 +176,9 @@ void *render_thread(void *data) {
     pthread_exit(0);
 
     fail:
-    renderer->release_egl();
+    renderer->release();
     renderer->m_js_event_handler->call_on_error(JS_EGL_RENDERER_SETUP_RENDERER_FAILED, 0, 0);
-    LOGE("egl_setup or int_render failed");
+    LOGE("egl thread exit unexpected.");
     renderer->m_is_renderer_thread_running = false;
     renderer->m_is_start_render = false;
     pthread_mutex_unlock(&renderer->m_mutex);
@@ -177,24 +194,14 @@ JS_RET JSEglRenderer::egl_setup() {
     EGLDisplay display = NULL;
     EGLContext context = NULL;
 
-    const EGLint configAttribs[] = {
+    static const EGLint configAttribs[] = {
             EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-            EGL_BLUE_SIZE, 4,
-            EGL_GREEN_SIZE, 4,
-            EGL_RED_SIZE, 4,
-            EGL_ALPHA_SIZE, 4,
-            EGL_NONE};
-
-//    const EGLint configAttribs[] = {
-//            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-//            EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
-//            EGL_BLUE_SIZE, 8,
-//            EGL_GREEN_SIZE, 8,
-//            EGL_RED_SIZE, 8,
-//            EGL_ALPHA_SIZE, 8,
-//            EGL_DEPTH_SIZE, 0,
-//            EGL_STENCIL_SIZE, 0,
-//            EGL_NONE};
+            EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+            EGL_BLUE_SIZE, 8,
+            EGL_GREEN_SIZE, 8,
+            EGL_RED_SIZE, 8,
+            EGL_NONE
+    };
 
     static const EGLint contextAttribs[] = {
             EGL_CONTEXT_CLIENT_VERSION, 2,
@@ -225,9 +232,9 @@ JS_RET JSEglRenderer::egl_setup() {
         goto fail;
     }
 
-
     m_display = display;
     m_context = context;
+
     return JS_OK;
 
     fail:
@@ -246,39 +253,34 @@ JS_RET JSEglRenderer::egl_setup() {
 JS_RET JSEglRenderer::init_renderer() {
 
     LOGD("init_renderer");
+
     JS_RET ret;
-    GLint textureUniformY;
-    GLint textureUniformU;
-    GLint textureUniformV;
 
-    gen_yuv_texture();
-
-    ret = load_shader();
-
-    if (ret == JS_ERR) {
-        goto fail;
+    ret = use_configured_program();
+    if (ret != JS_OK) {
+        return JS_ERR;
     }
-    glUseProgram(m_g_program);
 
-    textureUniformY = glGetUniformLocation(m_g_program, "SamplerY");
-    textureUniformU = glGetUniformLocation(m_g_program, "SamplerU");
-    textureUniformV = glGetUniformLocation(m_g_program, "SamplerV");
-    glUniform1i(textureUniformY, 0);
-    glUniform1i(textureUniformU, 1);
-    glUniform1i(textureUniformV, 2);
+    GLint samplers[3];
+    samplers[0] = glGetUniformLocation(m_g_program, "SamplerY");
+    samplers[1] = glGetUniformLocation(m_g_program, "SamplerU");
+    samplers[2] = glGetUniformLocation(m_g_program, "SamplerV");
 
-    glDisable(GL_CULL_FACE);
+    glGenTextures(3, m_texture_yuv);
+    for (int i = 0; i < 3; i++) {
+        glActiveTexture(GL_TEXTURE0 + i);
+        glBindTexture(GL_TEXTURE_2D, m_texture_yuv[i]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glUniform1i(samplers[i], i);
+    }
+
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     glDisable(GL_DEPTH_TEST);
     return JS_OK;
-
-    fail:
-    if (m_texture_yuv[TEXY]) {
-        glDeleteTextures(3, m_texture_yuv);
-    }
-    if (m_g_program != 0) {
-        glDeleteProgram(m_g_program);
-    }
-    return JS_ERR;
 }
 
 
@@ -306,39 +308,14 @@ GLuint JSEglRenderer::compile_shader(const char *pSource, GLenum shaderType) {
 }
 
 
-void JSEglRenderer::gen_yuv_texture() {
-
-    glGenTextures(3, m_texture_yuv);
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXY]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXU]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXV]);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-}
-
-JS_RET JSEglRenderer::load_shader() {
+JS_RET JSEglRenderer::use_configured_program() {
     GLint linkStatus = GL_FALSE;
+    GLuint program = 0;
     GLuint vertexShader = 0;
     GLuint fragmentShader = 0;
 
-    m_g_program = glCreateProgram();
-    if (!m_g_program) {
+    program = glCreateProgram();
+    if (!program) {
         goto fail;
     }
     vertexShader = compile_shader(gVertexShader, GL_VERTEX_SHADER);
@@ -350,33 +327,33 @@ JS_RET JSEglRenderer::load_shader() {
     if (!fragmentShader) {
         goto fail;
     }
-    glAttachShader(m_g_program, vertexShader);
-    glAttachShader(m_g_program, fragmentShader);
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
 
-    glBindAttribLocation(m_g_program, ATTRIB_VERTEX, "position");
-    glBindAttribLocation(m_g_program, ATTRIB_TEXTURE, "TexCoordIn");
+    glBindAttribLocation(program, ATTRIB_VERTEX, "position");
+    glBindAttribLocation(program, ATTRIB_TEXTURE, "TexCoordIn");
 
-    glLinkProgram(m_g_program);
+    glLinkProgram(program);
 
-    glGetProgramiv(m_g_program, GL_LINK_STATUS, &linkStatus);
+    glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
     if (linkStatus != GL_TRUE) {
         GLint bufLength = 0;
-        glGetProgramiv(m_g_program, GL_INFO_LOG_LENGTH, &bufLength);
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &bufLength);
         if (bufLength) {
             char *buf = (char *) malloc(bufLength);
             if (buf) {
-                glGetProgramInfoLog(m_g_program, bufLength, NULL, buf);
+                glGetProgramInfoLog(program, bufLength, NULL, buf);
                 LOGE("Could not link program:%s", buf);
                 free(buf);
             }
         }
-        glDeleteProgram(m_g_program);
-        m_g_program = 0;
         goto fail;
     }
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+    m_g_program = program;
+    glUseProgram(m_g_program);
     return JS_OK;
 
     fail:
@@ -384,6 +361,9 @@ JS_RET JSEglRenderer::load_shader() {
         glDeleteShader(vertexShader);
     if (fragmentShader)
         glDeleteShader(fragmentShader);
+    if (program) {
+        glDeleteProgram(program);
+    }
     return JS_ERR;
 }
 
@@ -391,25 +371,15 @@ JS_RET JSEglRenderer::load_shader() {
 void JSEglRenderer::render(AVFrame *frame) {
 
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-    m_y_pixels = frame->data[0];
-    m_u_pixels = frame->data[1];
-    m_v_pixels = frame->data[2];
+    const int heights[3] = {frame->height, frame->height / 2, frame->height / 2};
 
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXY]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, frame->linesize[0], frame->height, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, m_y_pixels);
-
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXU]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, frame->linesize[1], frame->height / 2, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, m_u_pixels);
-
-
-    glBindTexture(GL_TEXTURE_2D, m_texture_yuv[TEXV]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, frame->linesize[2], frame->height / 2, 0,
-                 GL_LUMINANCE, GL_UNSIGNED_BYTE, m_v_pixels);
-
+    for (int i = 0; i < 3; i++) {
+        glBindTexture(GL_TEXTURE_2D, m_texture_yuv[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, frame->linesize[i], heights[i], 0,
+                     GL_LUMINANCE, GL_UNSIGNED_BYTE, frame->data[i]);
+    }
 
     glVertexAttribPointer(ATTRIB_VERTEX, 2, GL_FLOAT, 0, 0, squareVertices);
     glEnableVertexAttribArray(ATTRIB_VERTEX);
@@ -421,15 +391,12 @@ void JSEglRenderer::render(AVFrame *frame) {
 
     if (!eglSwapBuffers(m_display, m_surface)) {
         LOGW("eglSwapBuffers() returned error %d", eglGetError());
-
     }
 }
 
 void JSEglRenderer::set_egl_buffer_queue_callback(egl_buffer_queue_callback callback, void *data) {
-
     m_callback_data = data;
     m_egl_buffer_queue_callback = callback;
-
 }
 
 
@@ -467,28 +434,28 @@ void JSEglRenderer::create_surface(jobject surface) {
         pthread_cond_signal(&m_create_surface_cond);
     }
     m_is_hold_surface = true;
-    m_is_need_update_surface = true;
+    m_has_new_surface = true;
     pthread_mutex_unlock(&m_mutex);
 }
-
-void JSEglRenderer::window_size_changed(int width, int height) {
-
-    pthread_mutex_lock(&m_mutex);
-    LOGD("m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
-         m_window_width,
-         m_window_height,
-         width,
-         height);
-    if (m_window_width == width && m_window_height == height) {
-        pthread_mutex_unlock(&m_mutex);
-        return;
-    }
-    m_is_window_size_changed = true;
-    m_window_width = width;
-    m_window_height = height;
-
-    pthread_mutex_unlock(&m_mutex);
-}
+//
+//void JSEglRenderer::window_size_changed(int width, int height) {
+//
+//    pthread_mutex_lock(&m_mutex);
+//    LOGD("m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
+//         m_window_width,
+//         m_window_height,
+//         width,
+//         height);
+//    if (m_window_width == width && m_window_height == height) {
+//        pthread_mutex_unlock(&m_mutex);
+//        return;
+//    }
+//    m_is_window_size_changed = true;
+//    m_window_width = width;
+//    m_window_height = height;
+//
+//    pthread_mutex_unlock(&m_mutex);
+//}
 
 
 void JSEglRenderer::destroy_surface() {
@@ -529,4 +496,3 @@ void JSEglRenderer::stop_render() {
     while (!m_is_waiting_for_create_surface && !m_is_waiting_for_start_render);
     LOGD("stop_render2...");
 }
-

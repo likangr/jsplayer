@@ -9,21 +9,6 @@
 
 //time_base AV_TIME_BASE_Q
 
-#define DEFAULT_PREPARE_TIME_OUT_MICROSECONDS               10000000//10s
-#define DEFAULT_READ_PKT_TIME_OUT_MICROSECONDS              10000000//10s
-#define NO_TIME_OUT_MICROSECONDS                            0
-
-#define DEFAULT_MIN_CACHED_DURATION_LIVE                    0
-#define DEFAULT_MAX_CACHED_DURATION_LIVE                    500000//500ms
-#define DEFAULT_MIN_DECODED_DURATION_LIVE                   0
-#define DEFAULT_MAX_DECODED_DURATION_LIVE                   500000//500ms
-
-#define DEFAULT_MIN_CACHED_DURATION_RECORD                  1000000*10//10s
-#define DEFAULT_MAX_CACHED_DURATION_RECORD                  1000000*60*3/2//1.5min
-#define DEFAULT_MIN_DECODED_DURATION_RECORD                 0
-#define DEFAULT_MAX_DECODED_DURATION_RECORD                 1000000//1s
-
-
 class JSPlayer;
 
 typedef void(JSPlayer::*CACHE_PACKET_FUNC)(AVPacket *avpkt);
@@ -61,11 +46,12 @@ public:
 
     JS_RET find_stream_info();
 
+    void init_decoder();
+
     JS_RET prepare_audio();
 
     JS_RET prepare_video();
 
-    void init_options();
 
     /*play*/
 

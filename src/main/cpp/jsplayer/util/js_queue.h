@@ -39,12 +39,6 @@ public:
 
     int64_t get_num();
 
-//    void put(T src);
-
-//    int64_t get_duration();
-
-//    void clear(CLEAR_MODE mode);
-
     int64_t (*get_duration)(void *queue_);
 
     void (*clear)(void *queue_, CLEAR_MODE mode);
@@ -64,6 +58,7 @@ public:
     pthread_mutex_t m_mutex;
     pthread_mutexattr_t m_mutexattr;
     pthread_cond_t m_cond;
+
     volatile bool m_is_waiting_for_reach_min_duration = false;
     volatile bool m_is_waiting_for_insufficient_max_duration = false;
     volatile bool m_is_need_to_drop_until_i_frame = false;
@@ -284,8 +279,7 @@ int64_t get_cached_duration(void *queue_) {
     last = dequeue->back();
     first = dequeue->front();
     if (last != NULL && first != NULL) {
-        duration = av_rescale_q(last->dts - first->dts, queue->m_time_base,
-                                AV_TIME_BASE_Q);
+        duration = (int64_t) ((last->dts - first->dts) * av_q2d(queue->m_time_base) * 1000000);
         pthread_mutex_unlock(mutex);
         return duration;
     } else {
@@ -317,8 +311,7 @@ int64_t get_decoded_duration(void *queue_) {
     last = dequeue->back();
     first = dequeue->front();
     if (last != NULL && first != NULL) {
-        duration = av_rescale_q(last->pts - first->pts, queue->m_time_base,
-                                AV_TIME_BASE_Q);
+        duration = (int64_t) ((last->pts - first->pts) * av_q2d(queue->m_time_base) * 1000000);
         pthread_mutex_unlock(mutex);
         return duration;
     } else {
@@ -350,7 +343,6 @@ void clear_packet(void *queue_, CLEAR_MODE mode) {
         for (it = dequeue->begin();
              it != dequeue->end();) {
             if ((*it)->flags & AV_PKT_FLAG_KEY) {
-                LOGD("keep key AVPacket");
                 it++;
                 continue;
             }
@@ -399,7 +391,6 @@ void clear_frame(void *queue_, CLEAR_MODE mode) {
              it != dequeue->end();) {
 
             if ((*it)->key_frame) {
-                LOGD("keep key AVFrame");
                 it++;
                 continue;
             }
@@ -434,7 +425,6 @@ void put_live_video_packet(void *queue_, void *src_) {
     pthread_mutex_t *mutex = &queue->m_mutex;
 
     pthread_mutex_lock(mutex);
-    LOGD("put_live_video_packet");
 
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *src = (AVPacket *) src_;
@@ -443,18 +433,16 @@ void put_live_video_packet(void *queue_, void *src_) {
         if (src->flags & AV_PKT_FLAG_KEY) {
             queue->m_is_need_to_drop_until_i_frame = false;
             dequeue->push_back(src);
-            LOGW("put_live_video_packet put a key frame.");
+            LOGD("*drop* stop drop non-key video packet.");
         } else {
             av_packet_free(&src);
-            LOGW("put_live_video_packet drop a non key frame."); //fixme to many.
+            LOGD("*drop* drop a non-key frame until key video packet.");
         }
     } else {
-        //todo 尝试丢掉两个非连续B帧（a,b)之前的所有帧。除b帧往前到前一个B帧之间的帧。动态监测算法。
-
 
         int64_t duration = queue->get_duration(queue);
         if (duration > queue->m_max_duration) {
-            LOGW("put_live_video_packet drop video packet ,duration=%"
+            LOGD("*drop* drop video packet (keep key),duration=%"
                  PRId64
                  ",num=%d",
                  duration, queue->get_num());
@@ -466,6 +454,10 @@ void put_live_video_packet(void *queue_, void *src_) {
 
             duration = queue->get_duration(queue);
             if (duration > queue->m_max_duration) {
+                LOGD("*drop* continue drop video packet (clear all),duration=%"
+                     PRId64
+                     ",num=%d",
+                     duration, queue->get_num());
                 queue->clear(queue, CLEAR_ALL);
                 queue->m_is_need_to_drop_until_i_frame = true;
             }
@@ -500,17 +492,19 @@ void put_live_video_frame(void *queue_, void *src_) {
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
     AVFrame *src = (AVFrame *) src_;
 
-
-    //todo 尝试丢掉两个非连续B帧（a,b)之前的所有帧。除b帧往前到前一个B帧之间的帧。动态监测算法。
     int64_t duration = queue->get_duration(queue);
     if (duration > queue->m_max_duration) {
-        LOGW("drop video frame ,duration=%"
+        LOGD("*drop* drop video frame (keep key),duration=%"
              PRId64
              ", num=%d",
              duration, queue->get_num());
         queue->clear(queue, CLEAR_KEEP_KEY_FRAME);
         duration = queue->get_duration(queue);
         if (duration > queue->m_max_duration) {
+            LOGD("*drop* drop video frame (clear all),duration=%"
+                 PRId64
+                 ", num=%d",
+                 duration, queue->get_num());
             queue->clear(queue, CLEAR_ALL);
         }
     } else if (duration >= queue->m_min_duration) {
@@ -537,11 +531,10 @@ void put_live_audio_packet(void *queue_, void *src_) {
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *src = (AVPacket *) src_;
 
-    //todo 尝试丢掉两个非连续B帧（a,b)之前的所有帧。除b帧往前到前一个B帧之间的帧。动态监测算法。
     int64_t duration = queue->get_duration(queue);
     if (duration > queue->m_max_duration) {
-        LOGW("drop audio packet ,duration=%"
-             PRId64
+        LOGD("*drop* drop audio packet ,duration=%"
+             "ld"
              ", num=%d",
              duration, queue->get_num());
         queue->clear(queue, CLEAR_ALL);
@@ -568,10 +561,10 @@ void put_live_audio_frame(void *queue_, void *src_) {
 
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
     AVFrame *src = (AVFrame *) src_;
-    //todo 尝试丢掉两个非连续B帧（a,b)之前的所有帧。除b帧往前到前一个B帧之间的帧。动态监测算法。
+
     int64_t duration = queue->get_duration(queue);
     if (duration > queue->m_max_duration) {
-        LOGW("drop audio frame ,duration=%"
+        LOGD("*drop* drop audio frame ,duration=%"
              PRId64
              ", num=%d",
              duration, queue->get_num());

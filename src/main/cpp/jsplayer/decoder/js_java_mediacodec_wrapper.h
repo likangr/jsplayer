@@ -2,6 +2,7 @@
 #define JS_JAVA_MEDIACODEC_WRAPPER_H
 
 #include "libavcodec/avcodec.h"
+#include "libavformat/avformat.h"
 
 /**
  * The following API around MediaCodec and MediaFormat is based on the
@@ -31,8 +32,9 @@
 
 
 
-int js_parseAVCodecContext(char *mime_type, int *width, int *height, int *profile, int *level,
-                           AVCodecContext *avctx);
+int js_AMediaCodecProfile_getProfileFromAVCodecParameters(char *mime_type, int *width, int *height,
+                                                          int *profile, int *level,
+                                                          AVCodecParameters *codecpar);
 
 char *
 js_MediaCodecList_getCodecNameByType(const char *mime, int profile, int encoder, void *log_ctx);

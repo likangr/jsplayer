@@ -425,8 +425,9 @@ struct JSMediaCodec {
     }                                                              \
 } while (0)
 
-int js_parseAVCodecContext(char *mime_type, int *width, int *height, int *profile, int *level,
-                           AVCodecContext *avctx) {
+int js_AMediaCodecProfile_getProfileFromAVCodecParameters(char *mime_type, int *width, int *height,
+                                                          int *profile, int *level,
+                                                          AVCodecParameters *codecpar) {
 
     int ret = JS_ERR;
 
@@ -434,14 +435,14 @@ int js_parseAVCodecContext(char *mime_type, int *width, int *height, int *profil
     struct JNIMediaCodecListFields jfields = {0};
     jfieldID field_id = 0;
 
-    JNI_GET_ENV_OR_RETURN(env, avctx, -1);
+    JNI_GET_ENV_OR_RETURN(env, NULL, -1);
 
-    if (js_jni_init_jfields(env, &jfields, jni_mediacodeclist_mapping, 0, avctx) < 0) {
+    if (js_jni_init_jfields(env, &jfields, jni_mediacodeclist_mapping, 0, NULL) < 0) {
         goto done;
     }
 
-    if (avctx->codec_id == AV_CODEC_ID_H264) {
-        switch (avctx->profile) {
+    if (codecpar->codec_id == AV_CODEC_ID_H264) {
+        switch (codecpar->profile) {
             case FF_PROFILE_H264_BASELINE:
             case FF_PROFILE_H264_CONSTRAINED_BASELINE:
                 field_id = jfields.avc_profile_baseline_id;
@@ -471,8 +472,8 @@ int js_parseAVCodecContext(char *mime_type, int *width, int *height, int *profil
         }
 
         strcpy(mime_type, JS_MIME_VIDEO_AVC);
-    } else if (avctx->codec_id == AV_CODEC_ID_HEVC) {
-        switch (avctx->profile) {
+    } else if (codecpar->codec_id == AV_CODEC_ID_HEVC) {
+        switch (codecpar->profile) {
             case FF_PROFILE_HEVC_MAIN:
             case FF_PROFILE_HEVC_MAIN_STILL_PICTURE:
                 field_id = jfields.hevc_profile_main_id;
@@ -487,18 +488,18 @@ int js_parseAVCodecContext(char *mime_type, int *width, int *height, int *profil
 
     if (field_id) {
         *profile = (*env)->GetStaticIntField(env, jfields.codec_profile_level_class, field_id);
-        if (js_jni_exception_check(env, 1, avctx) < 0) {
+        if (js_jni_exception_check(env, 1, NULL) < 0) {
             goto done;
         } else {
-            *width = avctx->width;
-            *height = avctx->height;
-            *level = avctx->level;
+            *width = codecpar->width;
+            *height = codecpar->height;
+            *level = codecpar->level;
             ret = JS_OK;
         }
     }
 
     done:
-    js_jni_reset_jfields(env, &jfields, jni_mediacodeclist_mapping, 0, avctx);
+    js_jni_reset_jfields(env, &jfields, jni_mediacodeclist_mapping, 0, NULL);
     return ret;
 }
 

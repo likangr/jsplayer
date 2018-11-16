@@ -3,35 +3,43 @@
 
 #include "js_media_decoder_context.h"
 #include "js_constant.h"
+#include "event/js_event_handler.h"
 
 extern "C" {
 #include "libavformat/avformat.h"
 }
 
 class JSMediaDecoder;
+
 typedef AVFrame *(JSMediaDecoder::*DECODE_PACKET_FUNC)(AVPacket *avpkt);
+
+typedef void (JSMediaDecoder::*FLUSH_FUNC)();
+
 
 class JSMediaDecoder {
 
 public:
-    JSMediaDecoder();
+
+    JSMediaDecoder(JSEventHandler *m_js_event_handler);
 
     ~JSMediaDecoder();
 
-    JS_RET create_decoder(AVStream *av_stream);
+    void set_decoder_type(const char *decoder_type);
 
+    JS_RET (JSMediaDecoder::*m_create_decoder_by_av_stream)(AVStream *av_stream);
 
     DECODE_PACKET_FUNC m_decode_video_packet;
     DECODE_PACKET_FUNC m_decode_audio_packet;
 
-    void set_decode_packet_type(const char *decode_type);
-
-    JS_RET flush();
+    FLUSH_FUNC m_video_flush;
+    FLUSH_FUNC m_audio_flush;
 
 private:
 
-    bool m_audio_hw_dec_available = false;
-    bool m_video_hw_dec_available = false;
+    JSEventHandler *m_js_event_handler = NULL;
+
+    AVFrame *m_video_reuse_frame = NULL;
+    AVFrame *m_audio_reuse_frame = NULL;
 
     JSMediaDecoderContext *m_video_hw_dec_ctx = NULL, *m_audio_hw_dec_ctx = NULL;
     void *m_video_hw_dec = NULL, *m_audio_hw_dec = NULL;
@@ -42,13 +50,17 @@ private:
     AVStream *m_audio_stream = NULL;
     AVStream *m_video_stream = NULL;
 
+    JS_RET create_video_hw_decoder();
 
-    JS_RET create_hw_decoder(AVStream *av_stream);
+    JS_RET create_audio_hw_decoder();
 
-    JS_RET create_sw_decoder(AVStream *av_stream);
+    JS_RET create_sw_decoder_by_av_stream(AVStream *av_stream);
+
+    JS_RET create_hw_decoder_by_av_stream(AVStream *av_stream);
 
     JS_RET process_hw_decode(AVPacket *avpkt,
                              AVFrame *frame);
+
 
     AVFrame *decode_audio_packet_with_hw(AVPacket *avpkt);
 
@@ -58,6 +70,16 @@ private:
 
     AVFrame *decode_video_packet_with_sw(AVPacket *avpkt);
 
+    inline AVFrame *decode_packet_with_sw_internal(AVCodecContext *avctx, AVPacket *avpkt,
+                                                   AVFrame *frame);
+
+    void audio_sw_decoder_flush();
+
+    void audio_hw_decoder_flush();
+
+    void video_sw_decoder_flush();
+
+    void video_hw_decoder_flush();
 };
 
 #endif //JS_MEDIA_DECODER_H

@@ -3,6 +3,7 @@ package com.joyshow.jsplayer.player;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.graphics.PixelFormat;
+import android.graphics.SurfaceTexture;
 import android.os.Build;
 import android.os.Environment;
 import android.os.Handler;
@@ -10,6 +11,7 @@ import android.util.AttributeSet;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.TextureView;
 import android.widget.FrameLayout;
 
 import com.joyshow.jsplayer.Constant;
@@ -29,6 +31,7 @@ public class JSPlayer extends FrameLayout {
     private JSSurfaceView mJSRenderView;
     private long mNativePlayer;
     private Handler mMainThreadHandler = new Handler();
+    private boolean mIsWantToPause = false;
 
     private OnPreparedListener mOnPreparedListener;
     private OnErrorListener mOnErrorListener;
@@ -123,13 +126,13 @@ public class JSPlayer extends FrameLayout {
 
         @Override
         public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            synchronized (JSPlayer.this) {
-                Logger.d(TAG, TAG + ":onSurfaceChanged:" + "width=" + width + ",height=" + height);
-                if (isDestroyed()) {
-                    return;
-                }
-                JSPlayer.this.onSurfaceChanged(mNativePlayer, width, height);
-            }
+//            synchronized (JSPlayer.this) {
+//                Logger.d(TAG, TAG + ":onSurfaceChanged:" + "width=" + width + ",height=" + height);
+//                if (isDestroyed()) {
+//                    return;
+//                }
+//                JSPlayer.this.onSurfaceChanged(mNativePlayer, width, height);
+//            }
         }
 
         @Override
@@ -141,6 +144,79 @@ public class JSPlayer extends FrameLayout {
                 }
                 JSPlayer.this.onSurfaceDestroyed(mNativePlayer);
             }
+        }
+
+
+    }
+
+
+    private class JSTextureView extends TextureView implements TextureView.SurfaceTextureListener {
+
+        private Surface mSurface;
+
+        public JSTextureView(Context context) {
+            super(context);
+            init();
+        }
+
+        public JSTextureView(Context context, AttributeSet attrs) {
+            super(context, attrs);
+            init();
+        }
+
+        public JSTextureView(Context context, AttributeSet attrs, int defStyleAttr) {
+            super(context, attrs, defStyleAttr);
+            init();
+        }
+
+        @TargetApi(Build.VERSION_CODES.LOLLIPOP)
+        public JSTextureView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+            super(context, attrs, defStyleAttr, defStyleRes);
+            init();
+        }
+
+        private void init() {
+            setSurfaceTextureListener(this);
+        }
+
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            this.mSurface = new Surface(surface);
+            synchronized (JSPlayer.this) {
+                Logger.d(TAG, TAG + ":onSurfaceCreated");
+                if (isDestroyed()) {
+                    return;
+                }
+                JSPlayer.this.onSurfaceCreated(mNativePlayer, mSurface);
+            }
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+            synchronized (JSPlayer.this) {
+                Logger.d(TAG, TAG + ":onSurfaceChanged:" + "width=" + width + ",height=" + height);
+                if (isDestroyed()) {
+                    return;
+                }
+                JSPlayer.this.onSurfaceChanged(mNativePlayer, width, height);
+            }
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            synchronized (JSPlayer.this) {
+                Logger.d(TAG, TAG + ":onSurfaceDestroyed");
+                if (isDestroyed()) {
+                    return true;
+                }
+                JSPlayer.this.onSurfaceDestroyed(mNativePlayer);
+            }
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+
         }
     }
 
@@ -218,6 +294,9 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void prepare() {
         checkDestroyedException(StackTraceInfo.getMethodName());
+        if (mIsWantToPause) {
+            mIsWantToPause = false;
+        }
         prepare(mNativePlayer);
     }
 
@@ -227,6 +306,9 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void play() {
         checkDestroyedException(StackTraceInfo.getMethodName());
+        if (mIsWantToPause) {
+            mIsWantToPause = false;
+        }
         if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
             Logger.w(TAG, "play is failed : player's status isn't PLAY_STATUS_PREPARED.");
             return;
@@ -242,6 +324,7 @@ public class JSPlayer extends FrameLayout {
     public synchronized void pause() {
         checkDestroyedException(StackTraceInfo.getMethodName());
         if (Constant.PLAY_STATUS_PLAYING != getPlayStatus()) {
+            mIsWantToPause = true;
             Logger.w(TAG, "pause is failed : player's status isn't PLAY_STATUS_PLAYING.");
             return;
         }
@@ -255,6 +338,13 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void resume() {
         checkDestroyedException(StackTraceInfo.getMethodName());
+        if (mIsWantToPause) {
+            if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
+                play();
+                return;
+            }
+            mIsWantToPause = false;
+        }
         if (Constant.PLAY_STATUS_PAUSED != getPlayStatus()) {
             Logger.w(TAG, "resume is failed : player's status isn't PLAY_STATUS_PAUSED.");
             return;
@@ -269,6 +359,9 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void stop() {
         checkDestroyedException(StackTraceInfo.getMethodName());
+        if (mIsWantToPause) {
+            mIsWantToPause = false;
+        }
         if (getPlayStatus() > Constant.PLAY_STATUS_CREATED && getPlayStatus() < Constant.PLAY_STATUS_STOPPED) {
             stop(mNativePlayer);
         } else {
@@ -284,6 +377,9 @@ public class JSPlayer extends FrameLayout {
      * @return
      */
     public synchronized void reset() {
+        if (mIsWantToPause) {
+            mIsWantToPause = false;
+        }
         checkDestroyedException(StackTraceInfo.getMethodName());
         reset(mNativePlayer);
 
@@ -301,6 +397,10 @@ public class JSPlayer extends FrameLayout {
     }
 
 
+    public boolean isWantToPause() {
+        return mIsWantToPause;
+    }
+
     /**
      * set url.
      *
@@ -313,8 +413,8 @@ public class JSPlayer extends FrameLayout {
 //        url="rtmp://pull-g.kktv8.com/livekktv/100987038";
 //        url="rtmp://ossrs.net/dkd/kb4yr";
 //        url="rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov";
-//        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
-
+//        url="http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4";
+        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
         setUrl(mNativePlayer, url);
     }
 
@@ -436,6 +536,21 @@ public class JSPlayer extends FrameLayout {
     public synchronized void setNativeParseDataFromVideoPacketCallbackHandle(long callbackHandle) {
         checkDestroyedException(StackTraceInfo.getMethodName());
         setNativeParseDataFromVideoPacketCallbackHandle(mNativePlayer, callbackHandle);
+    }
+
+    /**
+     * set surface available
+     *
+     * @param available
+     */
+    public void setSurfaceAvailable(boolean available) {
+        checkDestroyedException(StackTraceInfo.getMethodName());
+        if (available) {
+            addView(mJSRenderView);
+        } else {
+            removeView(mJSRenderView);
+        }
+
     }
 
     /**

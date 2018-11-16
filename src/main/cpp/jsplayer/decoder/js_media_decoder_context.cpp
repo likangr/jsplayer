@@ -68,7 +68,7 @@ JS_RET JSMediaDecoderContext::update_media_decoder_context() {
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_CROP_BOTTOM, &crop_bottom);
 
     ret = update_pix_fmt();
-    if (ret == JS_ERR) {
+    if (ret != JS_OK) {
         LOGE("output color format 0x%x (value=%d) is not supported",
              color_format, color_format);
         return JS_ERR;

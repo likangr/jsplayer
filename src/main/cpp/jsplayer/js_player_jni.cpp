@@ -48,13 +48,14 @@ static JNINativeMethod js_player_methods[] = {
 
 JNIEXPORT jint JS_JNI_CALL JNI_OnLoad(
         JavaVM *vm, void *reserved) {
-    LOGE("likang JNI_OnLoad");
+
     __JS_ANDROID_SDK_VERSION__ = js_get_sdk_version();
     if (__JS_ANDROID_SDK_VERSION__ >= __JS_NATIVE_MEDIACODEC_API_LEVEL__) {
         if (link_ndk_mediacodec() == JS_OK) {
             __JS_NDK_MEDIACODEC_LINKED__ = 1;
         }
     }
+
     js_jni_set_java_vm(vm, NULL);
     JNIEnv *env = js_jni_get_env(NULL);
     register_js_player_methods(env);
@@ -79,7 +80,8 @@ void JS_JNI_CALL native_setup_jni(JNIEnv *env, jclass cls) {
 
     av_register_all();
     avformat_network_init();
-    av_log_set_callback(ffp_log_callback_report);
+//    if (LOGGABLE)
+//        av_log_set_callback(ffp_log_callback_report);
 }
 
 void JS_JNI_CALL set_loggable(JNIEnv *env, jclass cls, jboolean loggable) {
@@ -228,8 +230,8 @@ void JS_JNI_CALL on_surface_created(JNIEnv *env, jobject obj, jlong handle, jobj
 
 void JS_JNI_CALL
 on_surface_changed(JNIEnv *env, jobject obj, jlong handle, jint width, jint height) {
-    JSPlayer *player = (JSPlayer *) handle;
-    player->m_egl_renderer->window_size_changed(width, height);
+//    JSPlayer *player = (JSPlayer *) handle;
+//    player->m_egl_renderer->window_size_changed(width, height);
 }
 
 void JS_JNI_CALL on_surface_destroyed(JNIEnv *env, jobject obj, jlong handle) {

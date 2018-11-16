@@ -95,9 +95,6 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
     m_bits_per_sample = bit_per_sample;
 
 
-    // configure audio source
-    SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
-
     SLDataFormat_PCM format_pcm;
     format_pcm.formatType = SL_DATAFORMAT_PCM;
     format_pcm.numChannels = (SLuint32) (m_channel_count);
@@ -112,6 +109,9 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
     }
     format_pcm.endianness = SL_BYTEORDER_LITTLEENDIAN;
 
+
+    // configure audio source
+    SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 1};
     SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
     // configure audio sink
