@@ -14,6 +14,7 @@ public class Constant {
     public static final String JS_OPTION_DECODER_TYPE = "key_decoder_type";
     public static final String JS_OPTION_DECODER_TYPE_HW = "decoder_type_hw";
     public static final String JS_OPTION_DECODER_TYPE_SW = "decoder_type_sw";
+    public static final String JS_OPTION_DECODER_TYPE_AUTO = "decoder_type_auto";
 
 
     public static final int JS_PLAYER_PREPARE_FAILED = -10001;

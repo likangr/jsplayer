@@ -55,9 +55,9 @@ public:
 
     deque<T> m_dequeue;
 
-    pthread_mutex_t m_mutex;
-    pthread_mutexattr_t m_mutexattr;
-    pthread_cond_t m_cond;
+    pthread_mutex_t m_mutex0, *m_mutex = &m_mutex0;
+    pthread_mutexattr_t m_mutexattr0, *m_mutexattr = &m_mutexattr0;
+    pthread_cond_t m_cond0, *m_cond = &m_cond0;
 
     volatile bool m_is_waiting_for_reach_min_duration = false;
     volatile bool m_is_waiting_for_insufficient_max_duration = false;
@@ -102,9 +102,9 @@ JSQueue<T>::JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_dur
                     int64_t max_duration,
                     bool is_live) {
 
-    pthread_mutexattr_settype(&m_mutexattr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&m_mutex, &m_mutexattr);
-    pthread_cond_init(&m_cond, NULL);
+    pthread_mutexattr_settype(m_mutexattr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(m_mutex, m_mutexattr);
+    pthread_cond_init(m_cond, NULL);
 
     m_queue_type = queue_type;
     m_time_base = time_base;
@@ -157,16 +157,16 @@ JSQueue<T>::JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_dur
 template<class T>
 JSQueue<T>::~JSQueue() {
     clear(this, CLEAR_ALL);
-    pthread_mutex_destroy(&m_mutex);
-    pthread_mutexattr_destroy(&m_mutexattr);
-    pthread_cond_destroy(&m_cond);
+    pthread_mutex_destroy(m_mutex);
+    pthread_mutexattr_destroy(m_mutexattr);
+    pthread_cond_destroy(m_cond);
 }
 
 template<class T>
 T JSQueue<T>::get() {
 
     while (true) {
-        pthread_mutex_lock(&m_mutex);
+        pthread_mutex_lock(m_mutex);
         if (is_reached_the_min_duration) {
             if (m_is_aborted_get) {
                 goto aborted;
@@ -177,26 +177,26 @@ T JSQueue<T>::get() {
             if (m_dequeue.empty()) {
                 is_reached_the_min_duration = false;
             } else if (m_is_waiting_for_insufficient_max_duration) {
-                pthread_cond_signal(&m_cond);
+                pthread_cond_signal(m_cond);
             }
-            pthread_mutex_unlock(&m_mutex);
+            pthread_mutex_unlock(m_mutex);
             return tmp;
         } else {
             if (m_is_aborted_get) {
                 goto aborted;
             }
             m_is_waiting_for_reach_min_duration = true;
-            pthread_cond_wait(&m_cond, &m_mutex);
+            pthread_cond_wait(m_cond, m_mutex);
             m_is_waiting_for_reach_min_duration = false;
             if (m_is_aborted_get) {
                 goto aborted;
             }
-            pthread_mutex_unlock(&m_mutex);
+            pthread_mutex_unlock(m_mutex);
         }
     }
 
     aborted:
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     return NULL;
 
 }
@@ -204,69 +204,68 @@ T JSQueue<T>::get() {
 
 template<class T>
 T JSQueue<T>::get_last() {
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     T last;
     if (m_dequeue.empty()) {
         last = NULL;
     } else {
         last = m_dequeue.back();
     }
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     return last;
 }
 
 template<class T>
 int64_t JSQueue<T>::get_num() {
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     int64_t size = m_dequeue.size();
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     return size;
 }
 
 template<class T>
 void JSQueue<T>::abort_get() {
 
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_aborted_get = true;
     if (m_is_waiting_for_reach_min_duration) {
-        pthread_cond_signal(&m_cond);
+        pthread_cond_signal(m_cond);
     }
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 
 }
 
 template<class T>
 void JSQueue<T>::clear_abort_get() {
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_aborted_get = false;
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 }
 
 template<class T>
 void JSQueue<T>::abort_put() {
 
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_aborted_put = true;
     if (m_is_waiting_for_insufficient_max_duration) {
-        pthread_cond_signal(&m_cond);
+        pthread_cond_signal(m_cond);
     }
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 
 }
 
 template<class T>
 void JSQueue<T>::clear_abort_put() {
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_aborted_put = false;
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 }
 
 
 int64_t get_cached_duration(void *queue_) {
     JSQueue<AVPacket *> *queue = (JSQueue<AVPacket *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *last;
     AVPacket *first;
@@ -280,23 +279,21 @@ int64_t get_cached_duration(void *queue_) {
     first = dequeue->front();
     if (last != NULL && first != NULL) {
         duration = (int64_t) ((last->dts - first->dts) * av_q2d(queue->m_time_base) * 1000000);
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return duration;
     } else {
         goto return0;
     }
 
     return0:
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
     return 0;
 }
 
 int64_t get_decoded_duration(void *queue_) {
     JSQueue<AVFrame *> *queue = (JSQueue<AVFrame *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
 
     AVFrame *last;
@@ -312,7 +309,7 @@ int64_t get_decoded_duration(void *queue_) {
     first = dequeue->front();
     if (last != NULL && first != NULL) {
         duration = (int64_t) ((last->pts - first->pts) * av_q2d(queue->m_time_base) * 1000000);
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return duration;
     } else {
         goto return0;
@@ -320,21 +317,20 @@ int64_t get_decoded_duration(void *queue_) {
 
 
     return0:
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
     return 0;
 }
 
 
 void clear_packet(void *queue_, CLEAR_MODE mode) {
     JSQueue<AVPacket *> *queue = (JSQueue<AVPacket *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
 
     if (dequeue->empty()) {
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return;
     }
     deque<AVPacket *>::iterator it;
@@ -360,26 +356,25 @@ void clear_packet(void *queue_, CLEAR_MODE mode) {
     if (dequeue->empty()) {
         queue->is_reached_the_min_duration = false;
     } else if (queue->m_is_waiting_for_insufficient_max_duration) {
-        pthread_cond_signal(&queue->m_cond);
+        pthread_cond_signal(queue->m_cond);
     }
 
 
     if (queue->m_queue_type == QUEUE_TYPE_VIDEO) {
         queue->m_is_need_to_drop_until_i_frame = true;
     }
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void clear_frame(void *queue_, CLEAR_MODE mode) {
     JSQueue<AVFrame *> *queue = (JSQueue<AVFrame *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
 
     if (dequeue->empty()) {
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return;
     }
 
@@ -415,16 +410,15 @@ void clear_frame(void *queue_, CLEAR_MODE mode) {
     if (dequeue->empty()) {
         queue->is_reached_the_min_duration = false;
     } else if (queue->m_is_waiting_for_insufficient_max_duration) {
-        pthread_cond_signal(&queue->m_cond);
+        pthread_cond_signal(queue->m_cond);
     }
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_live_video_packet(void *queue_, void *src_) {
     JSQueue<AVPacket *> *queue = (JSQueue<AVPacket *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *src = (AVPacket *) src_;
@@ -471,7 +465,7 @@ void put_live_video_packet(void *queue_, void *src_) {
             queue->is_reached_the_min_duration = true;
 
             if (queue->m_is_waiting_for_reach_min_duration) {
-                pthread_cond_signal(&queue->m_cond);
+                pthread_cond_signal(queue->m_cond);
             }
             dequeue->push_back(src);
         } else {
@@ -480,14 +474,13 @@ void put_live_video_packet(void *queue_, void *src_) {
 
 
     }
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_live_video_frame(void *queue_, void *src_) {
     JSQueue<AVFrame *> *queue = (JSQueue<AVFrame *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
     AVFrame *src = (AVFrame *) src_;
@@ -512,21 +505,20 @@ void put_live_video_frame(void *queue_, void *src_) {
         queue->is_reached_the_min_duration = true;
 
         if (queue->m_is_waiting_for_reach_min_duration) {
-            pthread_cond_signal(&queue->m_cond);
+            pthread_cond_signal(queue->m_cond);
         }
 
     }
 
     dequeue->push_back(src);
 
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_live_audio_packet(void *queue_, void *src_) {
     JSQueue<AVPacket *> *queue = (JSQueue<AVPacket *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *src = (AVPacket *) src_;
@@ -543,21 +535,20 @@ void put_live_audio_packet(void *queue_, void *src_) {
         queue->is_reached_the_min_duration = true;
 
         if (queue->m_is_waiting_for_reach_min_duration) {
-            pthread_cond_signal(&queue->m_cond);
+            pthread_cond_signal(queue->m_cond);
         }
 
     }
 
     dequeue->push_back(src);
 
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_live_audio_frame(void *queue_, void *src_) {
     JSQueue<AVFrame *> *queue = (JSQueue<AVFrame *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
     AVFrame *src = (AVFrame *) src_;
@@ -574,21 +565,20 @@ void put_live_audio_frame(void *queue_, void *src_) {
         queue->is_reached_the_min_duration = true;
 
         if (queue->m_is_waiting_for_reach_min_duration) {
-            pthread_cond_signal(&queue->m_cond);
+            pthread_cond_signal(queue->m_cond);
         }
 
     }
 
     dequeue->push_back(src);
 
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_record_packet(void *queue_, void *src_) {
     JSQueue<AVPacket *> *queue = (JSQueue<AVPacket *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVPacket *> *dequeue = &queue->m_dequeue;
     AVPacket *src = (AVPacket *) src_;
@@ -596,7 +586,7 @@ void put_record_packet(void *queue_, void *src_) {
     dequeue->push_back(src);
 
     if (queue->m_is_aborted_put) {
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return;
     }
 
@@ -605,7 +595,7 @@ void put_record_packet(void *queue_, void *src_) {
     if (duration >= queue->m_max_duration) {
 
         queue->m_is_waiting_for_insufficient_max_duration = true;
-        pthread_cond_wait(&queue->m_cond, mutex);
+        pthread_cond_wait(queue->m_cond, queue->m_mutex);
         queue->m_is_waiting_for_insufficient_max_duration = false;
 
     } else if (duration >= queue->m_min_duration) {
@@ -613,19 +603,18 @@ void put_record_packet(void *queue_, void *src_) {
         queue->is_reached_the_min_duration = true;
 
         if (queue->m_is_waiting_for_reach_min_duration) {
-            pthread_cond_signal(&queue->m_cond);
+            pthread_cond_signal(queue->m_cond);
         }
 
     }
 
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 void put_record_frame(void *queue_, void *src_) {
     JSQueue<AVFrame *> *queue = (JSQueue<AVFrame *> *) queue_;
-    pthread_mutex_t *mutex = &queue->m_mutex;
 
-    pthread_mutex_lock(mutex);
+    pthread_mutex_lock(queue->m_mutex);
 
     deque<AVFrame *> *dequeue = &queue->m_dequeue;
     AVFrame *src = (AVFrame *) src_;
@@ -635,7 +624,7 @@ void put_record_frame(void *queue_, void *src_) {
 
 
     if (queue->m_is_aborted_put) {
-        pthread_mutex_unlock(mutex);
+        pthread_mutex_unlock(queue->m_mutex);
         return;
     }
 
@@ -644,7 +633,7 @@ void put_record_frame(void *queue_, void *src_) {
     if (duration >= queue->m_max_duration) {
 
         queue->m_is_waiting_for_insufficient_max_duration = true;
-        pthread_cond_wait(&queue->m_cond, mutex);
+        pthread_cond_wait(queue->m_cond, queue->m_mutex);
         queue->m_is_waiting_for_insufficient_max_duration = false;
 
     } else if (duration >= queue->m_min_duration) {
@@ -652,12 +641,12 @@ void put_record_frame(void *queue_, void *src_) {
         queue->is_reached_the_min_duration = true;
 
         if (queue->m_is_waiting_for_reach_min_duration) {
-            pthread_cond_signal(&queue->m_cond);
+            pthread_cond_signal(queue->m_cond);
         }
 
     }
 
-    pthread_mutex_unlock(mutex);
+    pthread_mutex_unlock(queue->m_mutex);
 }
 
 

@@ -101,9 +101,9 @@ public:
     egl_buffer_queue_callback m_egl_buffer_queue_callback;
     void *m_callback_data;
 
-    pthread_mutex_t m_mutex;
-    pthread_cond_t m_start_render_cond;
-    pthread_cond_t m_create_surface_cond;
+    pthread_mutex_t m_mutex0, *m_mutex = &m_mutex0;
+    pthread_cond_t m_start_render_cond0, *m_start_render_cond = &m_start_render_cond0;
+    pthread_cond_t m_create_surface_cond0, *m_create_surface_cond = &m_create_surface_cond0;
 
     volatile bool m_is_start_render = false;
     volatile bool m_is_waiting_for_start_render = false;

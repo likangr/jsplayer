@@ -5,7 +5,6 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.Surface;
@@ -17,8 +16,6 @@ import android.widget.FrameLayout;
 import com.joyshow.jsplayer.Constant;
 import com.joyshow.jsplayer.utils.Logger;
 import com.joyshow.jsplayer.utils.StackTraceInfo;
-
-import java.io.File;
 
 
 /**
@@ -414,7 +411,7 @@ public class JSPlayer extends FrameLayout {
 //        url="rtmp://ossrs.net/dkd/kb4yr";
 //        url="rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov";
 //        url="http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4";
-        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
+//        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
         setUrl(mNativePlayer, url);
     }
 

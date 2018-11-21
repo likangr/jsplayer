@@ -6,7 +6,7 @@
 #define JS_PLAYER_CLASS "com/joyshow/jsplayer/player/JSPlayer"
 #define JS_JNI_CALL
 #define METHOD_ARRAY_ELEMS(a)  (sizeof(a) / sizeof(a[0]))
-extern jmethodID midOnPrepared;// 在头文件中声明,必须加上extern，否则就是重定义???
+extern jmethodID midOnPrepared;
 extern jmethodID midOnInterceptedPcmData;
 extern jmethodID midOnError;
 extern jmethodID midOnInfo;

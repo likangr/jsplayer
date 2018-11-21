@@ -637,11 +637,12 @@ void *read_frame_thread(void *data) {
     pthread_setname_np(pthread_self(), __func__);
     JSPlayer *player = (JSPlayer *) data;
     JSEventHandler *js_event_handler = player->m_js_event_handler;
-    AVPacket packet;
+    AVPacket packet, *packet1 = &packet;
+
     while (player->m_is_reading_frame) {
 
         player->set_cur_timing();
-        int ret = av_read_frame(player->m_format_ctx, &packet);
+        int ret = av_read_frame(player->m_format_ctx, packet1);
         if (ret != 0) {
             if (player->m_io_time_out != NO_TIME_OUT_MICROSECONDS) {
                 if (ret == AVERROR_EOF) {
@@ -662,21 +663,12 @@ void *read_frame_thread(void *data) {
         AVPacket *src = av_packet_alloc();
         if (src == NULL) {
             LOGE("can't av_packet_alloc");
-            av_packet_unref(&packet);
+            av_packet_unref(packet1);
             js_event_handler->call_on_error(JS_PLAYER_READ_FRAME_FAILED, 0, 0);
             pthread_exit(0);
         }
 
         *src = packet;
-
-//
-//        if (av_packet_ref(src, &packet) != 0) {
-//            LOGE("can't av_packet_ref");
-//            av_packet_free(&src);
-//            av_packet_unref(&packet);
-//            js_event_handler->call_on_error(JS_PLAYER_READ_FRAME_FAILED, 0, 0);
-//            pthread_exit(0);
-//        }
 
         if (packet.stream_index == player->m_audio_stream_index) {
 
@@ -691,7 +683,6 @@ void *read_frame_thread(void *data) {
             LOGD("*drop* drop a packet unsupported.");
         }
 
-//        av_packet_unref(&packet);
     }
     pthread_exit(0);
 }

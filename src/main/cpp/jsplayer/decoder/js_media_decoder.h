@@ -1,7 +1,7 @@
 #ifndef JS_MEDIA_DECODER_H
 #define JS_MEDIA_DECODER_H
 
-#include "js_media_decoder_context.h"
+#include "js_media_hw_decoder_context.h"
 #include "js_constant.h"
 #include "event/js_event_handler.h"
 
@@ -36,6 +36,8 @@ public:
 
 private:
 
+    char *m_decoder_type;
+
     JSEventHandler *m_js_event_handler = NULL;
 
     AVFrame *m_video_reuse_frame = NULL;
@@ -49,6 +51,8 @@ private:
 
     AVStream *m_audio_stream = NULL;
     AVStream *m_video_stream = NULL;
+
+    void update_funcs_by_decode_type(const AVMediaType media_type, const char *decoder_type);
 
     JS_RET create_video_hw_decoder();
 

@@ -52,6 +52,10 @@ JSMediaDecoder::~JSMediaDecoder() {
     if (m_audio_reuse_frame) {
         av_frame_free(&m_audio_reuse_frame);
     }
+
+    if (m_decoder_type) {
+        free(m_decoder_type);
+    }
 }
 
 
@@ -118,7 +122,7 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
     js_MediaFormat_setString(format, JS_MEDIAFORMAT_KEY_MIME, video_hw_dec_ctx->mime_type);
     js_MediaFormat_setInt32(format, JS_MEDIAFORMAT_KEY_WIDTH, video_hw_dec_ctx->width);
     js_MediaFormat_setInt32(format, JS_MEDIAFORMAT_KEY_HEIGHT, video_hw_dec_ctx->height);
-    //js_MediaFormat_setInt32(format, JS_MEDIAFORMAT_KEY_MAX_INPUT_SIZE, 0);
+//    js_MediaFormat_setInt32(format, JS_MEDIAFORMAT_KEY_MAX_INPUT_SIZE, 0);
 
     sps_pps_size = 0;
     convert_size = (size_t) m_video_stream->codecpar->extradata_size + 20;
@@ -207,13 +211,15 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
         free(convert_buffer);
     }
 
-    return JS_ERR;
+    return JS_ERR_HW_DECODER_UNAVAILABLE;
 }
 
 
 JS_RET JSMediaDecoder::create_audio_hw_decoder() {
-    m_audio_reuse_frame = av_frame_alloc();
-    return JS_ERR;
+//    m_audio_reuse_frame = av_frame_alloc();
+
+
+    return JS_ERR_HW_DECODER_UNAVAILABLE;
 }
 
 JS_RET JSMediaDecoder::create_sw_decoder_by_av_stream(AVStream *av_stream) {
@@ -274,7 +280,7 @@ JS_RET JSMediaDecoder::create_sw_decoder_by_av_stream(AVStream *av_stream) {
         avcodec_close(av_codec_ctx);
         avcodec_free_context(&av_codec_ctx);
     }
-    return JS_ERR;
+    return JS_ERR_SW_DECODER_UNAVAILABLE;
 }
 
 
@@ -285,17 +291,18 @@ JS_RET JSMediaDecoder::create_hw_decoder_by_av_stream(AVStream *av_stream) {
     AVMediaType media_type = av_stream->codecpar->codec_type;
 
     if (media_type == AVMEDIA_TYPE_AUDIO) {
+        //todo complete create_audio_hw_decoder func.
 //        m_audio_stream = av_stream;
 //        ret = create_audio_hw_decoder();
 //        if (ret != JS_OK) {
 //            LOGE("%s failed to create_audio_hw_decoder", __func__);
-//            return JS_ERR;
+//            goto judge_use_sw_decoder;
 //        }
 
         ret = create_sw_decoder_by_av_stream(av_stream);
         if (ret != JS_OK) {
             LOGE("%s failed to create_sw_decoder_by_av_stream", __func__);
-            return JS_ERR;
+            return ret;
         }
 
     } else if (media_type == AVMEDIA_TYPE_VIDEO) {
@@ -303,15 +310,30 @@ JS_RET JSMediaDecoder::create_hw_decoder_by_av_stream(AVStream *av_stream) {
         ret = create_video_hw_decoder();
         if (ret != JS_OK) {
             LOGE("%s failed to create_video_hw_decoder", __func__);
-            return JS_ERR;
+            goto judge_use_sw_decoder;
         }
+
     } else {
         LOGE("%s unsupport media_type %d=", __func__,
              media_type);
         return JS_ERR;
     }
 
+    return JS_OK;
 
+
+    judge_use_sw_decoder:
+    if (!strcmp(m_decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
+        ret = create_sw_decoder_by_av_stream(av_stream);
+        if (ret != JS_OK) {
+            LOGE("%s failed to create_sw_decoder_by_av_stream", __func__);
+            return ret;
+        }
+    } else {
+        return ret;
+    }
+
+    update_funcs_by_decode_type(media_type, JS_OPTION_DECODER_TYPE_SW);
     return JS_OK;
 }
 
@@ -479,20 +501,42 @@ JSMediaDecoder::process_hw_decode(
 }
 
 void JSMediaDecoder::set_decoder_type(const char *decoder_type) {
-    if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW)) {
+    m_decoder_type = (char *) malloc(strlen(decoder_type));
+    sprintf(m_decoder_type, "%s", decoder_type);
+    LOGD("m_decoder_type=%s", m_decoder_type);
+
+    if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW) ||
+        !strcmp(decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
         m_create_decoder_by_av_stream = &JSMediaDecoder::create_hw_decoder_by_av_stream;
-        m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_hw;
-//        m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_hw;
-        m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
-//        m_audio_flush = &JSMediaDecoder::audio_hw_decoder_flush;
-        m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
-        m_video_flush = &JSMediaDecoder::video_hw_decoder_flush;
     } else {
         m_create_decoder_by_av_stream = &JSMediaDecoder::create_sw_decoder_by_av_stream;
-        m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
-        m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_sw;
-        m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
-        m_video_flush = &JSMediaDecoder::video_sw_decoder_flush;
+    }
+    update_funcs_by_decode_type(AVMEDIA_TYPE_AUDIO, m_decoder_type);
+    update_funcs_by_decode_type(AVMEDIA_TYPE_VIDEO, m_decoder_type);
+}
+
+void JSMediaDecoder::update_funcs_by_decode_type(const AVMediaType media_type,
+                                                 const char *decoder_type) {
+
+    if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW) ||
+        !strcmp(decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
+        if (media_type == AVMEDIA_TYPE_AUDIO) {
+            //        m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_hw;
+            m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
+//        m_audio_flush = &JSMediaDecoder::audio_hw_decoder_flush;
+            m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
+        } else if (media_type == AVMEDIA_TYPE_VIDEO) {
+            m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_hw;
+            m_video_flush = &JSMediaDecoder::video_hw_decoder_flush;
+        }
+    } else {
+        if (media_type == AVMEDIA_TYPE_AUDIO) {
+            m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
+            m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
+        } else if (media_type == AVMEDIA_TYPE_VIDEO) {
+            m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_sw;
+            m_video_flush = &JSMediaDecoder::video_sw_decoder_flush;
+        }
     }
 }
 
@@ -521,11 +565,20 @@ AVFrame *JSMediaDecoder::decode_video_packet_with_hw(AVPacket *avpkt) {
 
     //todo while and flush and drop.
     JS_RET ret = process_hw_decode(avpkt, frame);
-
     if (ret == JS_OK) {
         return frame;
     } else if (ret == JS_ERR_HW_DECODER_UNAVAILABLE) {
-        m_js_event_handler->call_on_error(JS_ERR_HW_DECODER_UNAVAILABLE, 0, 0);
+        if (!strcmp(m_decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
+            ret = create_sw_decoder_by_av_stream(m_video_stream);
+            if (ret != JS_OK) {
+                LOGE("%s failed to create_sw_decoder_by_av_stream", __func__);
+                m_js_event_handler->call_on_error(JS_ERR_SW_DECODER_UNAVAILABLE, 0, 0);
+            } else {
+                update_funcs_by_decode_type(AVMEDIA_TYPE_VIDEO, JS_OPTION_DECODER_TYPE_SW);
+            }
+        } else {
+            m_js_event_handler->call_on_error(JS_ERR_HW_DECODER_UNAVAILABLE, 0, 0);
+        }
     }
 
 

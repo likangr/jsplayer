@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "js_constant.h"
-#include "decoder/js_media_decoder_context.h"
+#include "decoder/js_media_hw_decoder_context.h"
 
 extern "C" {
 #include "libavutil/frame.h"

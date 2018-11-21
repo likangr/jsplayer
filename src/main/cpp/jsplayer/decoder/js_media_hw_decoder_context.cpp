@@ -1,4 +1,4 @@
-#include "js_media_decoder_context.h"
+#include "js_media_hw_decoder_context.h"
 #include "js_mediacodec_def.h"
 
 extern "C" {

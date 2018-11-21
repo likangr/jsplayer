@@ -27,7 +27,7 @@ add_library( # Sets the name of the library.
              ${jsplayer_src_dir}/render/js_egl_renderer.cpp
              ${jsplayer_src_dir}/converter/js_media_converter.cpp
              ${jsplayer_src_dir}/decoder/js_media_decoder.cpp
-             ${jsplayer_src_dir}/decoder/js_media_decoder_context.cpp
+             ${jsplayer_src_dir}/decoder/js_media_hw_decoder_context.cpp
              ${jsplayer_src_dir}/decoder/js_ndk_mediacodec_proxy.c
              ${jsplayer_src_dir}/decoder/js_java_mediacodec_wrapper.c
              ${jsplayer_src_dir}/event/js_event_handler.cpp

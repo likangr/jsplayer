@@ -6,6 +6,7 @@ typedef int JS_RET;
 #define JS_OK                                                    0         /* no error */
 #define JS_ERR                                                  -1         /* generic error */
 #define JS_ERR_HW_DECODER_UNAVAILABLE                           JS_ERR-1
+#define JS_ERR_SW_DECODER_UNAVAILABLE                           JS_ERR-2
 
 #define JS_PLAYER_PREPARE_FAILED                                -10001
 #define JS_PLAYER_PLAY_AUDIO_FAILED                             -10002

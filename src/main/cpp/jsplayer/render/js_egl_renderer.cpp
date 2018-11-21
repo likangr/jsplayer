@@ -9,16 +9,16 @@ extern "C" {
 
 JSEglRenderer::JSEglRenderer(JSEventHandler *js_eventHandler) {
     m_js_event_handler = js_eventHandler;
-    pthread_mutex_init(&m_mutex, NULL);
-    pthread_cond_init(&m_start_render_cond, NULL);
-    pthread_cond_init(&m_create_surface_cond, NULL);
+    pthread_mutex_init(m_mutex, NULL);
+    pthread_cond_init(m_start_render_cond, NULL);
+    pthread_cond_init(m_create_surface_cond, NULL);
 }
 
 
 JSEglRenderer::~JSEglRenderer() {
-    pthread_mutex_destroy(&m_mutex);
-    pthread_cond_destroy(&m_start_render_cond);
-    pthread_cond_destroy(&m_create_surface_cond);
+    pthread_mutex_destroy(m_mutex);
+    pthread_cond_destroy(m_start_render_cond);
+    pthread_cond_destroy(m_create_surface_cond);
 }
 
 
@@ -51,7 +51,7 @@ void JSEglRenderer::release() {
 void *render_thread(void *data) {
     pthread_setname_np(pthread_self(), __func__);
     JSEglRenderer *renderer = (JSEglRenderer *) data;
-    pthread_mutex_lock(&renderer->m_mutex);
+    pthread_mutex_lock(renderer->m_mutex);
     if (!renderer->m_is_renderer_thread_running) {
         goto end;
     }
@@ -60,11 +60,11 @@ void *render_thread(void *data) {
         goto fail;
     }
 
-    pthread_mutex_unlock(&renderer->m_mutex);
+    pthread_mutex_unlock(renderer->m_mutex);
 
     while (1) {
 
-        pthread_mutex_lock(&renderer->m_mutex);
+        pthread_mutex_lock(renderer->m_mutex);
         if (!renderer->m_is_renderer_thread_running) {
             break;
         }
@@ -72,7 +72,7 @@ void *render_thread(void *data) {
         if (!renderer->m_is_start_render) {
             LOGE("wait_for_start_render");
             renderer->m_is_waiting_for_start_render = true;
-            pthread_cond_wait(&renderer->m_start_render_cond, &renderer->m_mutex);
+            pthread_cond_wait(renderer->m_start_render_cond, renderer->m_mutex);
             renderer->m_is_waiting_for_start_render = false;
             if (!renderer->m_is_renderer_thread_running) {
                 break;
@@ -81,7 +81,7 @@ void *render_thread(void *data) {
         if (!renderer->m_is_hold_surface) {
             LOGE("wait_for_create_surface");
             renderer->m_is_waiting_for_create_surface = true;
-            pthread_cond_wait(&renderer->m_create_surface_cond, &renderer->m_mutex);
+            pthread_cond_wait(renderer->m_create_surface_cond, renderer->m_mutex);
             renderer->m_is_waiting_for_create_surface = false;
             if (!renderer->m_is_renderer_thread_running) {
                 break;
@@ -160,7 +160,7 @@ void *render_thread(void *data) {
 //            renderer->m_is_window_size_changed = false;
 //        }
 
-        pthread_mutex_unlock(&renderer->m_mutex);
+        pthread_mutex_unlock(renderer->m_mutex);
 
         (*renderer->m_egl_buffer_queue_callback)(renderer->m_callback_data);
     }
@@ -172,7 +172,7 @@ void *render_thread(void *data) {
         ANativeWindow_release(renderer->m_native_window);
         renderer->m_native_window = NULL;
     }
-    pthread_mutex_unlock(&renderer->m_mutex);
+    pthread_mutex_unlock(renderer->m_mutex);
     pthread_exit(0);
 
     fail:
@@ -181,7 +181,7 @@ void *render_thread(void *data) {
     LOGE("egl thread exit unexpected.");
     renderer->m_is_renderer_thread_running = false;
     renderer->m_is_start_render = false;
-    pthread_mutex_unlock(&renderer->m_mutex);
+    pthread_mutex_unlock(renderer->m_mutex);
     pthread_exit(0);
 }
 
@@ -402,10 +402,10 @@ void JSEglRenderer::set_egl_buffer_queue_callback(egl_buffer_queue_callback call
 
 void JSEglRenderer::create_renderer_thread() {
     LOGD("create_renderer_thread...");
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_renderer_thread_running = true;
     pthread_create(&m_render_tid, NULL, render_thread, this);
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 }
 
 void JSEglRenderer::destroy_renderer_thread() {
@@ -413,14 +413,14 @@ void JSEglRenderer::destroy_renderer_thread() {
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_renderer_thread_running = false;
     if (m_is_waiting_for_start_render) {
-        pthread_cond_signal(&m_start_render_cond);
+        pthread_cond_signal(m_start_render_cond);
     } else if (m_is_waiting_for_create_surface) {
-        pthread_cond_signal(&m_create_surface_cond);
+        pthread_cond_signal(m_create_surface_cond);
     }
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     pthread_join(m_render_tid, NULL);
     LOGD("destroy_renderer_thread2...");
 }
@@ -428,44 +428,44 @@ void JSEglRenderer::destroy_renderer_thread() {
 void JSEglRenderer::create_surface(jobject surface) {
     LOGD("create_surface");
 
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_native_window = ANativeWindow_fromSurface(js_jni_get_env(NULL), surface);
     if (m_is_waiting_for_create_surface) {
-        pthread_cond_signal(&m_create_surface_cond);
+        pthread_cond_signal(m_create_surface_cond);
     }
     m_is_hold_surface = true;
     m_has_new_surface = true;
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
 }
 //
 //void JSEglRenderer::window_size_changed(int width, int height) {
 //
-//    pthread_mutex_lock(&m_mutex);
+//    pthread_mutex_lock(m_mutex);
 //    LOGD("m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
 //         m_window_width,
 //         m_window_height,
 //         width,
 //         height);
 //    if (m_window_width == width && m_window_height == height) {
-//        pthread_mutex_unlock(&m_mutex);
+//        pthread_mutex_unlock(m_mutex);
 //        return;
 //    }
 //    m_is_window_size_changed = true;
 //    m_window_width = width;
 //    m_window_height = height;
 //
-//    pthread_mutex_unlock(&m_mutex);
+//    pthread_mutex_unlock(m_mutex);
 //}
 
 
 void JSEglRenderer::destroy_surface() {
     LOGD("destroy_surface1");
 
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     ANativeWindow_release(m_native_window);
     m_native_window = NULL;
     m_is_hold_surface = false;
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     while (!m_is_waiting_for_start_render && !m_is_waiting_for_create_surface);
     LOGD("destroy_surface2");
 }
@@ -476,12 +476,12 @@ void JSEglRenderer::start_render(int picture_width, int picture_height) {
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_picture_width = picture_width;
     m_picture_height = picture_height;
     m_is_start_render = true;
-    pthread_cond_signal(&m_start_render_cond);
-    pthread_mutex_unlock(&m_mutex);
+    pthread_cond_signal(m_start_render_cond);
+    pthread_mutex_unlock(m_mutex);
     LOGD("start_render2...");
 }
 
@@ -490,9 +490,9 @@ void JSEglRenderer::stop_render() {
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(&m_mutex);
+    pthread_mutex_lock(m_mutex);
     m_is_start_render = false;
-    pthread_mutex_unlock(&m_mutex);
+    pthread_mutex_unlock(m_mutex);
     while (!m_is_waiting_for_create_surface && !m_is_waiting_for_start_render);
     LOGD("stop_render2...");
 }
