@@ -7,10 +7,12 @@
 
 extern "C" {
 #include "libavutil/frame.h"
+#include "decoder/js_java_mediacodec_wrapper.h"
 }
 
-#define   DST_FORMAT                         AV_SAMPLE_FMT_S16
-#define   DST_BITS_PER_SAMPLE                16
+#define   DEFAULT_AV_PIX_FMT                            AV_PIX_FMT_YUV420P
+#define   DEFAULT_AV_SAMPLE_FMT                         AV_SAMPLE_FMT_S16
+#define   DST_BITS_PER_SAMPLE                           16
 //#define   DST_LAYOUT                         AV_CH_LAYOUT_STEREO
 //#define   DST_CHANNEL                        2
 //#define   DST_SAMPLE_RATE                    44100
@@ -18,11 +20,12 @@ extern "C" {
 
 unsigned int convert_simple_format_to_S16(uint8_t *audio_buf, AVFrame *frame);
 
-JS_RET convert_color_format(
-        JSMediaDecoderContext *ctx,
-        uint8_t *data,
-        size_t size,
-        AVFrame *frame);
+JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
+                        JSMediaCodec *video_hw_dec,
+                        AVStream *av_stream,
+                        JSMediaCodecBufferInfo *info,
+                        AVFrame *frame, uint8_t *data,
+                        size_t size);
 
 
 JS_RET convert_sps_pps(const uint8_t *p_buf, size_t i_buf_size,

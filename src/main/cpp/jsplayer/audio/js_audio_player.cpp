@@ -18,7 +18,7 @@ JSAudioPlayer::JSAudioPlayer() {
 }
 
 JSAudioPlayer::~JSAudioPlayer() {
-    m_callback = NULL;
+    sl_android_simple_buffer_queue_callback = NULL;
 }
 
 JS_RET JSAudioPlayer::create_engine() {
@@ -74,7 +74,7 @@ JS_RET JSAudioPlayer::create_engine() {
     return JS_OK;
 
     fail:
-    release();
+    reset();
     return JS_ERR;
 }
 
@@ -166,15 +166,18 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
         goto fail;
     }
 
-    if (m_callback == NULL) {
-        LOGE("m_callback is null ,please use set_audio_buffer_queue_callback to set the m_callback first");
+    if (sl_android_simple_buffer_queue_callback == NULL) {
+        LOGE("sl_android_simple_buffer_queue_callback is null ,please use set_audio_buffer_queue_callback to set the sl_android_simple_buffer_queue_callback first");
         goto fail;
     }
 
     // register callback on the bufferQueue
-    ret = (*m_bq_player_buffer_queue)->RegisterCallback(m_bq_player_buffer_queue, m_callback, data);
+    ret = (*m_bq_player_buffer_queue)->RegisterCallback(m_bq_player_buffer_queue,
+                                                        sl_android_simple_buffer_queue_callback,
+                                                        data);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("register m_callback on the buffer m_dequeue failed: errcode=%d", ret);
+        LOGE("register sl_android_simple_buffer_queue_callback on the buffer m_dequeue failed: errcode=%d",
+             ret);
         goto fail;
     }
 
@@ -224,7 +227,7 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
     return JS_OK;
 
     fail:
-    release();
+    reset();
     return JS_ERR;
 }
 
@@ -242,8 +245,18 @@ JS_RET JSAudioPlayer::enqueue(const void *buffer, unsigned int size) {
     return JS_OK;
 }
 
+JS_RET JSAudioPlayer::clear() {
+    SLresult ret;
+    ret = (*m_bq_player_buffer_queue)->Clear(m_bq_player_buffer_queue);
+    if (SL_RESULT_SUCCESS != ret) {
+        LOGE("clear failed: errcode=%d", ret);
+        return JS_ERR;
+    }
+    return JS_OK;
+}
+
 void JSAudioPlayer::set_audio_buffer_queue_callback(slAndroidSimpleBufferQueueCallback callback) {
-    this->m_callback = callback;
+    sl_android_simple_buffer_queue_callback = callback;
 }
 
 
@@ -308,7 +321,7 @@ void JSAudioPlayer::set_channel_mute(int channel, bool mute) {
 
 }
 
-void JSAudioPlayer::release() {
+void JSAudioPlayer::reset() {
     m_is_created_audio_player = false;
     m_channel_count = 0;
     m_rate = 0;

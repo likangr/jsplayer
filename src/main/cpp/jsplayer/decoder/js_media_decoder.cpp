@@ -14,8 +14,8 @@ extern "C" {
 #include "util/js_jni.h"
 }
 
-#define INPUT_DEQUEUE_TIMEOUT_US        8*1000
-#define OUTPUT_DEQUEUE_TIMEOUT_US       8*1000
+#define INPUT_DEQUEUE_TIMEOUT_US            8000
+#define OUTPUT_DEQUEUE_TIMEOUT_US           8000
 
 JSMediaDecoder::JSMediaDecoder(JSEventHandler *js_eventHandler) {
     m_js_event_handler = js_eventHandler;
@@ -23,39 +23,6 @@ JSMediaDecoder::JSMediaDecoder(JSEventHandler *js_eventHandler) {
 
 JSMediaDecoder::~JSMediaDecoder() {
 
-    if (m_video_hw_dec_ctx) {
-        delete m_video_hw_dec_ctx;
-    }
-    if (m_video_hw_dec) {
-        js_MediaCodec_stop(m_video_hw_dec);
-        js_MediaCodec_delete(m_video_hw_dec);
-    }
-    if (m_video_sw_dec_ctx) {
-        avcodec_close(m_video_sw_dec_ctx);
-        avcodec_free_context(&m_video_sw_dec_ctx);
-    }
-    if (m_video_reuse_frame) {
-        av_frame_free(&m_video_reuse_frame);
-    }
-
-    if (m_audio_hw_dec_ctx) {
-        delete m_audio_hw_dec_ctx;
-    }
-    if (m_audio_hw_dec) {
-        js_MediaCodec_stop(m_audio_hw_dec);
-        js_MediaCodec_delete(m_audio_hw_dec);
-    }
-    if (m_audio_sw_dec_ctx) {
-        avcodec_close(m_audio_sw_dec_ctx);
-        avcodec_free_context(&m_audio_sw_dec_ctx);
-    }
-    if (m_audio_reuse_frame) {
-        av_frame_free(&m_audio_reuse_frame);
-    }
-
-    if (m_decoder_type) {
-        free(m_decoder_type);
-    }
 }
 
 
@@ -94,8 +61,8 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
     video_hw_dec_ctx->codec_name = js_MediaCodecList_getCodecNameByType(
             video_hw_dec_ctx->mime_type,
             video_hw_dec_ctx->profile,
-            0,
-            0);
+            false,
+            NULL);
 
     if (!video_hw_dec_ctx->codec_name) {
         LOGE("%s can't get codec name.", __func__);
@@ -190,7 +157,6 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
     m_video_hw_dec = video_hw_dec;
     m_video_hw_dec_ctx = video_hw_dec_ctx;
     m_video_hw_dec_ctx->format = format;
-    m_video_reuse_frame = av_frame_alloc();
 
     LOGD("%s success", __func__);
     return JS_OK;
@@ -216,7 +182,6 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
 
 
 JS_RET JSMediaDecoder::create_audio_hw_decoder() {
-//    m_audio_reuse_frame = av_frame_alloc();
 
 
     return JS_ERR_HW_DECODER_UNAVAILABLE;
@@ -261,12 +226,10 @@ JS_RET JSMediaDecoder::create_sw_decoder_by_av_stream(AVStream *av_stream) {
 
     if (avCodecParas->codec_type == AVMEDIA_TYPE_AUDIO) {
         m_audio_stream = av_stream;
-        m_audio_reuse_frame = av_frame_alloc();
         m_audio_sw_dec_ctx = av_codec_ctx;
         m_audio_sw_dec = av_codec;
     } else if (avCodecParas->codec_type == AVMEDIA_TYPE_VIDEO) {
         m_video_stream = av_stream;
-        m_video_reuse_frame = av_frame_alloc();
         m_video_sw_dec_ctx = av_codec_ctx;
         m_video_sw_dec = av_codec;
     } else {
@@ -337,85 +300,15 @@ JS_RET JSMediaDecoder::create_hw_decoder_by_av_stream(AVStream *av_stream) {
     return JS_OK;
 }
 
-/**
- * ﻿  if (pkt->size == 0) {
-        need_draining = 1;
-    }
 
- */
-
-JS_RET
-JSMediaDecoder::process_hw_decode(
-        AVPacket *avpkt,
-        AVFrame *frame) {
+JS_RET JSMediaDecoder::mediacodecdec_receive_frame(AVFrame *frame) {
 
     int index = 0;
     int ret = 0;
     uint8_t *buffer = NULL;
     size_t buffer_size = 0;
-    uint32_t flags = 0;
     JSMediaCodecBufferInfo info = {0};
 
-    index = (int) js_MediaCodec_dequeueInputBuffer(m_video_hw_dec,
-                                                   INPUT_DEQUEUE_TIMEOUT_US);
-
-    LOGD("%s dequeueInputBuffer index=%d", __func__, index);
-
-    if (index >= 0) {
-        buffer = js_MediaCodec_getInputBuffer(m_video_hw_dec, (size_t) index,
-                                              &buffer_size);//todo buffer_size> pkt->size?
-
-        if (!buffer) {
-            LOGE("%s failed to get input buffer", __func__);
-            goto get_output_buffer;
-        }
-//        LOGD("buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", buffer_size, avpkt->size,
-//             buffer_size > avpkt->size);
-
-        memcpy(buffer, avpkt->data, (size_t) avpkt->size);
-
-        if (avpkt->flags & AV_PKT_FLAG_KEY) {
-            flags |= BUFFER_FLAG_KEY_FRAME;
-        }// todo 补充 eos
-
-        LOGD("%s queueInputBuffer flags=%d", __func__, flags);
-
-//        int num = m_video_sw_dec_ctx->time_base.num;
-//        int den = m_video_sw_dec_ctx->time_base.den;
-//        int rate = m_video_sw_dec_ctx->time_base.num / m_video_sw_dec_ctx->time_base.den;
-//        LOGE(" num=%d,den=%d, rate=%d", num,
-//             den, rate);//  num=0,den=2, rate=0
-
-//        int num = m_video_sw_dec_ctx->pkt_timebase.num;
-//        int den = m_video_sw_dec_ctx->pkt_timebase.den;
-//        int rate = m_video_sw_dec_ctx->pkt_timebase.num / m_video_sw_dec_ctx->pkt_timebase.den;
-//        LOGE(" num=%d,den=%d, rate=%d", num,
-//             den, rate);//  num=0,den=1, rate=0
-
-        int64_t pts = avpkt->pts;
-
-        //AVPacket: presentationTimeUs calculate.  such as m_video_stream->time_base=1/1000  AV_TIME_BASE_Q=1/10000000
-        if (m_video_stream->time_base.num && m_video_stream->time_base.den) {
-            pts = av_rescale_q(pts, m_video_stream->time_base,
-                               AV_TIME_BASE_Q);
-        }
-
-
-        LOGD("%s js_MediaCodec_queueInputBuffer pts=%" PRId64, __func__,
-             pts);
-
-        ret = js_MediaCodec_queueInputBuffer(m_video_hw_dec, (size_t) index, 0,
-                                             (size_t) avpkt->size,
-                                             (uint64_t) pts, flags);
-        if (ret < 0) {
-            LOGD("%s failed to queue input buffer (status = %d)", __func__, ret);
-        }
-
-    } else if (AMEDIACODEC_INFO_TRY_AGAIN_LATER == index) {
-        LOGD("%s index input js_MediaCodec_infoTryAgainLater", __func__);
-    }
-
-    get_output_buffer:
     index = (int) js_MediaCodec_dequeueOutputBuffer(m_video_hw_dec, &info,
                                                     OUTPUT_DEQUEUE_TIMEOUT_US);
 
@@ -425,46 +318,43 @@ JSMediaDecoder::process_hw_decode(
          info.offset);
 
     if (index >= 0) {
-        /**
-         *     if (info.flags & MEDIACODEC_BUFFER_FLAG_END_OF_STREM) {
-                LOGV("output EOS");
-                d->sawOutputEOS = true;
-            }
-         */
 
         if (info.size) {
+
             buffer = js_MediaCodec_getOutputBuffer(m_video_hw_dec, (size_t) index, &buffer_size);
 
             if (!buffer) {
                 LOGE("%s failed to get output buffer", __func__);
-                return JS_ERR;
+                return JS_ERR_EXTERNAL;
             }
 
-            ret = convert_color_format(m_video_hw_dec_ctx, buffer, buffer_size,
-                                       frame);
-            js_MediaCodec_releaseOutputBuffer(m_video_hw_dec, (size_t) index, 0);
+            ret = fill_video_frame(m_video_hw_dec_ctx,
+                                   (JSMediaCodec *) (m_video_hw_dec),
+                                   m_video_stream,
+                                   &info,
+                                   frame,
+                                   buffer,
+                                   buffer_size);
 
-
-            if (m_video_stream->time_base.num && m_video_stream->time_base.den) {
-                frame->pts = av_rescale_q(info.presentationTimeUs, AV_TIME_BASE_Q,
-                                          m_video_stream->time_base);
-            } else {
-                frame->pts = info.presentationTimeUs;
-            }
-
-            LOGD("%s js_MediaCodec_getOutputBuffer pts=%" PRId64, __func__, frame->pts);
-            return ret;
-
-
-        } else {//fixme outputbufferInfo_size==0 is eos mark.
-            ret = js_MediaCodec_releaseOutputBuffer(m_video_hw_dec, (size_t) index, 0);
-            if (ret < 0) {
+            if (js_MediaCodec_releaseOutputBuffer(m_video_hw_dec, (size_t) index, 0) < 0) {
                 LOGD("%s failed to release output buffer", __func__);
             }
+
+            if (ret != JS_OK) {
+                LOGD("%s failed to fill video frame", __func__);
+                return JS_ERR_EXTERNAL;
+            }
+
+        } else {
+            if (js_MediaCodec_releaseOutputBuffer(m_video_hw_dec, (size_t) index, 0) < 0) {
+                LOGD("%s failed to release output buffer", __func__);
+            }
+
+            return JS_ERR_EOF;
         }
 
-    } else if (AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED == index) {
-        LOGD("%s index js_MediaCodec_infoOutputFormatChanged", __func__);
+    } else if (js_MediaCodec_getInfoOutputFormatChanged((JSMediaCodec *) m_video_hw_dec) == index) {
+        LOGD("%s js_MediaCodec_infoOutputFormatChanged", __func__);
 
         if (m_video_hw_dec_ctx->format) {
             ret = js_MediaFormat_delete(m_video_hw_dec_ctx->format);
@@ -476,29 +366,123 @@ JSMediaDecoder::process_hw_decode(
         m_video_hw_dec_ctx->format = js_MediaCodec_getOutputFormat(m_video_hw_dec);
         if (!m_video_hw_dec_ctx->format) {
             LOGE("%s failed to get output format", __func__);
-            return JS_ERR_HW_DECODER_UNAVAILABLE;
+            return JS_ERR_EXTERNAL;
         }
 
         ret = m_video_hw_dec_ctx->update_media_decoder_context();
         if (ret != JS_OK) {
             LOGE("%s update_media_codec_dec_context failed", __func__);
-            return JS_ERR_HW_DECODER_UNAVAILABLE;
+            return JS_ERR_EXTERNAL;
         }
-    } else if (AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED == index) {
-        LOGD("%s index js_MediaCodec_infoOutputBuffersChanged", __func__);
 
-        if (!__JS_NDK_MEDIACODEC_LINKED__) {
-            js_MediaCodec_cleanOutputBuffers((JSMediaCodec *) m_video_hw_dec);
-        }
-    } else if (AMEDIACODEC_INFO_TRY_AGAIN_LATER == index) {
-        LOGD("%s index out put js_MediaCodec_infoTryAgainLater", __func__);
+        return JS_ERR_TRY_AGAIN;
 
+    } else if (js_MediaCodec_getInfoOutputBuffersChanged((JSMediaCodec *) m_video_hw_dec) ==
+               index) {
+        LOGD("%s js_MediaCodec_infoOutputBuffersChanged", __func__);
+
+        js_MediaCodec_cleanOutputBuffers((JSMediaCodec *) m_video_hw_dec);
+
+        return JS_ERR_TRY_AGAIN;
+    } else if (js_MediaCodec_getInfoTryAgainLater((JSMediaCodec *) m_video_hw_dec) == index) {
+        LOGD("%s js_MediaCodec_getInfoTryAgainLater", __func__);
+
+        return JS_ERR_TRY_AGAIN;
     } else {
-        LOGD("%s failed to dequeue output buffer (ret=%zd)", __func__, index);
+        LOGD("%s js_MediaCodec_dequeueOutputBuffer (index=%d)", __func__, index);
+
+        return JS_ERR_EXTERNAL;
     }
 
-    return JS_ERR;
+    return JS_OK;
 }
+
+JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
+
+    int index = 0;
+    int ret = 0;
+    uint8_t *buffer = NULL;
+    size_t buffer_size = 0;
+    int flags = 0;
+    int need_draining = avpkt->size == 0;
+
+    index = (int) js_MediaCodec_dequeueInputBuffer(m_video_hw_dec, INPUT_DEQUEUE_TIMEOUT_US);
+
+    LOGD("%s dequeueInputBuffer index=%d", __func__, index);
+
+    if (index >= 0) {
+        buffer = js_MediaCodec_getInputBuffer(m_video_hw_dec, (size_t) index,
+                                              &buffer_size);//fixme buffer_size must > pkt->size?
+
+        if (!buffer) {
+            LOGE("%s failed to get input buffer", __func__);
+            return JS_ERR_EXTERNAL;
+        }
+
+        LOGD("buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", buffer_size, avpkt->size,
+             buffer_size > avpkt->size);
+
+        int64_t pts;
+        if (need_draining) {
+
+            flags |= js_MediaCodec_getBufferFlagEndOfStream(
+                    (JSMediaCodec *) m_video_hw_dec);
+
+//            if (s->surface) {
+//                pts = av_rescale_q(pts, avctx->pkt_timebase, av_make_q(1, 1000000));
+//            }
+            pts = avpkt->pts;
+
+            LOGD("%s send End Of Stream signal", __func__);
+
+        } else {
+
+            /**
+            int bufferFlagKeyFrame = MediaCodec.BUFFER_FLAG_KEY_FRAME; api21 fixme
+             */
+            if (avpkt->flags & AV_PKT_FLAG_KEY) {
+                flags |= js_MediaCodec_getBufferFlagKeyFrame((JSMediaCodec *) m_video_hw_dec);
+            }
+
+            pts = avpkt->pts;
+
+            //AVPacket: presentationTimeUs calculate.  such as m_video_stream->time_base=1/1000  AV_TIME_BASE_Q=1/10000000
+            if (m_video_stream->time_base.num && m_video_stream->time_base.den) {
+                pts = av_rescale_q(pts, m_video_stream->time_base,
+                                   AV_TIME_BASE_Q);
+            }
+
+
+            //fixme more codec type.
+            H264ConvertState convert_state = {0};
+            convert_h264_to_annexb(avpkt->data, (size_t) avpkt->size, m_video_hw_dec_ctx->nal_size,
+                                   &convert_state);
+
+            memcpy(buffer, avpkt->data, (size_t) avpkt->size);
+        }
+
+        LOGD("%s js_MediaCodec_queueInputBuffer pts=%" PRId64, __func__,
+             pts);
+
+        ret = js_MediaCodec_queueInputBuffer(m_video_hw_dec, (size_t) index, 0,
+                                             (size_t) avpkt->size,
+                                             (uint64_t) pts, flags);
+
+        if (ret < 0) {
+            LOGD("%s failed to queue input buffer (status = %d)", __func__, ret);
+            return JS_ERR_EXTERNAL;
+        }
+    } else if (js_MediaCodec_getInfoTryAgainLater((JSMediaCodec *) m_video_hw_dec) == index) {
+        LOGD("%s js_MediaCodec_infoTryAgainLater", __func__);
+        return JS_ERR_TRY_AGAIN;
+    } else {
+        LOGD("%s failed to js_MediaCodec_dequeueInputBuffer (index=%d)", __func__, index);
+        return JS_ERR_EXTERNAL;
+    }
+
+    return JS_OK;
+}
+
 
 void JSMediaDecoder::set_decoder_type(const char *decoder_type) {
     m_decoder_type = (char *) malloc(strlen(decoder_type));
@@ -521,130 +505,189 @@ void JSMediaDecoder::update_funcs_by_decode_type(const AVMediaType media_type,
     if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW) ||
         !strcmp(decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
         if (media_type == AVMEDIA_TYPE_AUDIO) {
-            //        m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_hw;
-            m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
-//        m_audio_flush = &JSMediaDecoder::audio_hw_decoder_flush;
-            m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
+            //        decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_hw;
+            decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
+//        audio_decoder_flush = &JSMediaDecoder::audio_hw_decoder_flush;
+            audio_decoder_flush = &JSMediaDecoder::audio_sw_decoder_flush;
         } else if (media_type == AVMEDIA_TYPE_VIDEO) {
-            m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_hw;
-            m_video_flush = &JSMediaDecoder::video_hw_decoder_flush;
+            decode_video_packet = &JSMediaDecoder::decode_video_packet_with_hw;
+            video_decoder_flush = &JSMediaDecoder::video_hw_decoder_flush;
         }
     } else {
         if (media_type == AVMEDIA_TYPE_AUDIO) {
-            m_decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
-            m_audio_flush = &JSMediaDecoder::audio_sw_decoder_flush;
+            decode_audio_packet = &JSMediaDecoder::decode_audio_packet_with_sw;
+            audio_decoder_flush = &JSMediaDecoder::audio_sw_decoder_flush;
         } else if (media_type == AVMEDIA_TYPE_VIDEO) {
-            m_decode_video_packet = &JSMediaDecoder::decode_video_packet_with_sw;
-            m_video_flush = &JSMediaDecoder::video_sw_decoder_flush;
+            decode_video_packet = &JSMediaDecoder::decode_video_packet_with_sw;
+            video_decoder_flush = &JSMediaDecoder::video_sw_decoder_flush;
         }
     }
 }
 
 
-AVFrame *JSMediaDecoder::decode_audio_packet_with_hw(AVPacket *avpkt) {
-    return NULL;
+JS_RET JSMediaDecoder::decode_audio_packet_with_hw(AVPacket *avpkt,
+                                                   AVFrame *frame) {
+    return JS_ERR;
 }
 
-AVFrame *JSMediaDecoder::decode_video_packet_with_hw(AVPacket *avpkt) {
 
-    AVFrame *frame = NULL;
-    H264ConvertState convert_state = {0, 0};
+JS_RET JSMediaDecoder::decode_video_packet_with_hw(AVPacket *avpkt,
+                                                   AVFrame *frame) {
 
-    frame = av_frame_alloc();
-    if (!frame) {
-        LOGE("%s unable to allocate an AVFrame!", __func__);
-        return NULL;
-    }
-    frame->key_frame = (avpkt->flags & AV_PKT_FLAG_KEY) ? 1 : 0;
-    LOGD("%s is key_frame :%d", __func__, frame->key_frame);
+    JS_RET ret;
+    bool is_send_packet = false;
 
 
-    convert_h264_to_annexb(avpkt->data, (size_t) avpkt->size, m_video_hw_dec_ctx->nal_size,
-                           &convert_state);
+    while (true) {
+        while (true) {
 
+            ret = mediacodecdec_receive_frame(frame);
 
-    //todo while and flush and drop.
-    JS_RET ret = process_hw_decode(avpkt, frame);
-    if (ret == JS_OK) {
-        return frame;
-    } else if (ret == JS_ERR_HW_DECODER_UNAVAILABLE) {
-        if (!strcmp(m_decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
-            ret = create_sw_decoder_by_av_stream(m_video_stream);
-            if (ret != JS_OK) {
-                LOGE("%s failed to create_sw_decoder_by_av_stream", __func__);
-                m_js_event_handler->call_on_error(JS_ERR_SW_DECODER_UNAVAILABLE, 0, 0);
+            if (ret == JS_OK) {
+                return is_send_packet ? JS_OK : JS_OK_NOT_DECODE_PACKET;
+            } else if (ret == JS_ERR_EOF) {
+                return JS_ERR_EOF;
+            } else if (ret == JS_ERR_TRY_AGAIN) {
+                if (is_send_packet) {
+                    return JS_ERR_NEED_SEND_NEW_PACKET_AGAIN;
+                } else {
+                    break;
+                }
             } else {
-                update_funcs_by_decode_type(AVMEDIA_TYPE_VIDEO, JS_OPTION_DECODER_TYPE_SW);
+                LOGW("%s mediacodecdec_receive_frame failed,result=%d", __func__, ret);
+                goto hw_decoder_unavailable;
             }
-        } else {
-            m_js_event_handler->call_on_error(JS_ERR_HW_DECODER_UNAVAILABLE, 0, 0);
         }
+
+
+        ret = mediacodecdec_send_packet(avpkt);
+        if (ret == JS_OK) {
+            is_send_packet = true;
+        } else if (ret == JS_ERR_TRY_AGAIN) {
+            return JS_ERR_NEED_SEND_THIS_PACKET_AGAIN;
+        } else {
+            LOGW("%s mediacodecdec_send_packet failed,result=%d", __func__, ret);
+            goto hw_decoder_unavailable;
+        }
+
     }
 
+    hw_decoder_unavailable:
+    LOGE("%s goto hw decoder unavailable", __func__);
+    if (!strcmp(m_decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
+        ret = create_sw_decoder_by_av_stream(m_video_stream);
+        if (ret != JS_OK) {
+            LOGE("%s failed to create_sw_decoder_by_av_stream", __func__);
+            return JS_ERR_SW_DECODER_UNAVAILABLE;
+        } else {
+            update_funcs_by_decode_type(AVMEDIA_TYPE_VIDEO, JS_OPTION_DECODER_TYPE_SW);
+            return JS_ERR_TRY_TO_USE_SW_DECODER;
+        }
+    } else {
+        return JS_ERR_HW_DECODER_UNAVAILABLE;
+    }
+}
 
-    av_frame_free(&frame);
-    return frame;
+JS_RET JSMediaDecoder::decode_audio_packet_with_sw(AVPacket *avpkt,
+                                                   AVFrame *frame) {
+    return decode_packet_with_sw_internal(m_audio_sw_dec_ctx, avpkt, frame);
+
+}
+
+JS_RET JSMediaDecoder::decode_video_packet_with_sw(AVPacket *avpkt,
+                                                   AVFrame *frame) {
+    return decode_packet_with_sw_internal(m_video_sw_dec_ctx, avpkt, frame);
+
 }
 
 
-AVFrame *JSMediaDecoder::decode_audio_packet_with_sw(AVPacket *avpkt) {
-    return decode_packet_with_sw_internal(m_audio_sw_dec_ctx, avpkt, m_audio_reuse_frame);
-}
-
-AVFrame *JSMediaDecoder::decode_video_packet_with_sw(AVPacket *avpkt) {
-    return decode_packet_with_sw_internal(m_video_sw_dec_ctx, avpkt, m_video_reuse_frame);
-}
-
-
-inline AVFrame *
-JSMediaDecoder::decode_packet_with_sw_internal(AVCodecContext *avctx, AVPacket *avpkt,
+JS_RET
+JSMediaDecoder::decode_packet_with_sw_internal(AVCodecContext *avctx,
+                                               AVPacket *avpkt,
                                                AVFrame *frame) {
 
-    int ret = avcodec_send_packet(avctx, avpkt);
+    int ret;
+    bool is_send_packet = false;
 
-    if (ret != 0) {
-        LOGE("%s avcodec_send_packet failed,result=%d", __func__, ret);
-        return NULL;
+    while (true) {
+        while (true) {
+
+            ret = avcodec_receive_frame(avctx, frame);
+
+            if (ret == 0) {
+                return is_send_packet ? JS_OK : JS_OK_NOT_DECODE_PACKET;
+            } else if (ret == AVERROR_EOF) {
+                return JS_ERR_EOF;
+            } else if (ret == AVERROR(EAGAIN)) {
+                if (is_send_packet) {
+                    return JS_ERR_NEED_SEND_NEW_PACKET_AGAIN;
+                } else {
+                    break;
+                }
+            } else {
+                return JS_ERR_SW_DECODER_UNAVAILABLE;
+            }
+        }
+
+        ret = avcodec_send_packet(avctx, avpkt);
+        if (ret != 0) {
+            LOGE("%s avcodec_send_packet failed,result=%d", __func__, ret);
+            return JS_ERR_SW_DECODER_UNAVAILABLE;
+        }
+        is_send_packet = true;
     }
-
-    ret = avcodec_receive_frame(avctx, frame);
-
-    if (ret != 0) {
-        LOGE("%s avcodec_receive_frame failed,result=%d", __func__, ret);
-        return NULL;
-    }
-
-    AVFrame *tmp = av_frame_alloc();
-    if (tmp == NULL) {
-        LOGE("%s unable to allocate an AVFrame!", __func__);
-        goto done;
-    }
-
-    if (av_frame_ref(tmp, frame) != 0) {
-        LOGE("%s can't av_frame_ref", __func__);
-        av_frame_free(&tmp);
-        goto done;
-    }
-
-    done:
-    av_frame_unref(frame);
-    return tmp;
 }
 
 void JSMediaDecoder::audio_sw_decoder_flush() {
-    m_audio_sw_dec->flush;
-}
-
-void JSMediaDecoder::audio_hw_decoder_flush() {
-    js_MediaCodec_flush(m_audio_sw_dec);
     avcodec_flush_buffers(m_audio_sw_dec_ctx);
 }
 
+void JSMediaDecoder::audio_hw_decoder_flush() {
+    avcodec_flush_buffers(m_audio_sw_dec_ctx);
+//    js_MediaCodec_flush(m_audio_hw_dec);
+}
+
 void JSMediaDecoder::video_sw_decoder_flush() {
-    m_video_sw_dec->flush;//fixme don't know is can work.
+    avcodec_flush_buffers(m_video_sw_dec_ctx);
 }
 
 void JSMediaDecoder::video_hw_decoder_flush() {
     js_MediaCodec_flush(m_video_hw_dec);
-    avcodec_flush_buffers(m_video_sw_dec_ctx);
+}
+
+void JSMediaDecoder::reset() {
+    if (m_video_hw_dec_ctx) {
+        delete m_video_hw_dec_ctx;
+        m_video_hw_dec_ctx = NULL;
+    }
+    if (m_video_hw_dec) {
+        js_MediaCodec_stop(m_video_hw_dec);
+        js_MediaCodec_delete(m_video_hw_dec);
+        m_video_hw_dec = NULL;
+    }
+    if (m_video_sw_dec_ctx) {
+        avcodec_close(m_video_sw_dec_ctx);
+        avcodec_free_context(&m_video_sw_dec_ctx);
+    }
+
+    if (m_audio_hw_dec_ctx) {
+        delete m_audio_hw_dec_ctx;
+        m_audio_hw_dec_ctx = NULL;
+    }
+
+    if (m_audio_hw_dec) {
+        js_MediaCodec_stop(m_audio_hw_dec);
+        js_MediaCodec_delete(m_audio_hw_dec);
+        m_audio_hw_dec = NULL;
+    }
+
+    if (m_audio_sw_dec_ctx) {
+        avcodec_close(m_audio_sw_dec_ctx);
+        avcodec_free_context(&m_audio_sw_dec_ctx);
+    }
+
+    if (m_decoder_type) {
+        free(m_decoder_type);
+        m_decoder_type = NULL;
+    }
 }

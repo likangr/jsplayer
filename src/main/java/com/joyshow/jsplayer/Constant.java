@@ -17,9 +17,4 @@ public class Constant {
     public static final String JS_OPTION_DECODER_TYPE_AUTO = "decoder_type_auto";
 
 
-    public static final int JS_PLAYER_PREPARE_FAILED = -10001;
-    public static final int JS_PLAYER_PLAY_AUDIO_FAILED = -10002;
-    public static final int JS_PLAYER_READ_FRAME_FAILED = -10003;
-    public static final int JS_EGL_RENDERER_SETUP_RENDERER_FAILED = -10004;
-
 }

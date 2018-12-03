@@ -49,12 +49,13 @@ static JNINativeMethod js_player_methods[] = {
 JNIEXPORT jint JS_JNI_CALL JNI_OnLoad(
         JavaVM *vm, void *reserved) {
 
-    __JS_ANDROID_SDK_VERSION__ = js_get_sdk_version();
-    if (__JS_ANDROID_SDK_VERSION__ >= __JS_NATIVE_MEDIACODEC_API_LEVEL__) {
-        if (link_ndk_mediacodec() == JS_OK) {
-            __JS_NDK_MEDIACODEC_LINKED__ = 1;
-        }
-    }
+//    __JS_ANDROID_SDK_VERSION__ = js_get_sdk_version();
+//    if (__JS_ANDROID_SDK_VERSION__ >= __JS_NATIVE_MEDIACODEC_API_LEVEL__) {
+//        if (link_ndk_mediacodec() == JS_OK) {
+//            __JS_NDK_MEDIACODEC_LINKED__ = 1;
+//        }
+//    }
+    init_signal_avpkt();
 
     js_jni_set_java_vm(vm, NULL);
     JNIEnv *env = js_jni_get_env(NULL);
@@ -65,9 +66,10 @@ JNIEXPORT jint JS_JNI_CALL JNI_OnLoad(
 
 JNIEXPORT void JS_JNI_CALL JNI_OnUnload(JavaVM *vm, void *reserved) {
     LOGE("likang JNI_OnUnload");
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        close_ndk_mediacodec();
-    }
+//    if (__JS_NDK_MEDIACODEC_LINKED__) {
+//        close_ndk_mediacodec();
+//    }
+
     avformat_network_deinit();
 
     if (LOG_FILE_PATH) {
@@ -296,16 +298,16 @@ void JS_JNI_CALL
 set_native_intercepted_pcm_data_callback_handle(JNIEnv *env, jobject obj, jlong handle,
                                                 jlong callback_handle) {
     JSPlayer *player = (JSPlayer *) handle;
-    player->m_native_intercepted_pcm_data_callback = (void (*)(jlong, short *, int,
-                                                               int)) (callback_handle);
+    player->native_intercepted_pcm_data_callback = (void (*)(jlong, short *, int,
+                                                             int)) (callback_handle);
 }
 
 void JS_JNI_CALL
 set_native_parse_data_from_video_packet_callback_handle(JNIEnv *env, jobject obj, jlong handle,
                                                         jlong callback_handle) {
     JSPlayer *player = (JSPlayer *) handle;
-    player->m_native_parse_data_from_video_packet_callback = (void (*)(uint8_t *,
-                                                                       int)) (callback_handle);
+    player->native_parse_data_from_video_packet_callback = (void (*)(uint8_t *,
+                                                                     int)) (callback_handle);
 
 }
 

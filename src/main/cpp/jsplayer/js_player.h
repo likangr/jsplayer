@@ -11,7 +11,7 @@
 
 class JSPlayer;
 
-typedef void(JSPlayer::*CACHE_PACKET_FUNC)(AVPacket *avpkt);
+typedef JS_RET (JSPlayer::*CACHE_PACKET_FUNC)(AVPacket *avpkt);
 
 class JSPlayer {
 
@@ -80,22 +80,22 @@ public:
     void on_surface_hold_state_changed();
 
 
-    CACHE_PACKET_FUNC m_cache_audio_packet;
-    CACHE_PACKET_FUNC m_cache_video_packet;
+    CACHE_PACKET_FUNC cache_audio_packet;
+    CACHE_PACKET_FUNC cache_video_packet;
 
-    /*save video packet way*/
+    /*cache video packet way*/
 
-    void cache_record_video_packet(AVPacket *src);
+    JS_RET cache_record_video_packet(AVPacket *src);
 
-    void cache_live_video_packet_hold_surface(AVPacket *src);
+    JS_RET cache_live_video_packet_hold_surface(AVPacket *src);
 
-    void cache_live_video_packet_not_hold_surface(AVPacket *src);
+    JS_RET cache_live_video_packet_not_hold_surface(AVPacket *src);
 
-    /*save audio packet way*/
+    /*cache audio packet way*/
 
-    void cache_record_audio_packet(AVPacket *src);
+    JS_RET cache_record_audio_packet(AVPacket *src);
 
-    void cache_live_audio_packet(AVPacket *src);
+    JS_RET cache_live_audio_packet(AVPacket *src);
 
 /***
  * ********************************
@@ -104,6 +104,7 @@ public:
  */
 
     /*basic*/
+    bool m_is_eof = false;
 
     const char *m_url = NULL;
     bool m_is_live = false;
@@ -155,13 +156,13 @@ public:
 
     /*func pointers*/
 
-    void (*m_native_intercepted_pcm_data_callback)(jlong native_js_player,
-                                                   short *pcm_data,
-                                                   int sample_num,
-                                                   int channel_num);
+    void (*native_intercepted_pcm_data_callback)(jlong native_js_player,
+                                                 short *pcm_data,
+                                                 int sample_num,
+                                                 int channel_num);
 
-    void (*m_native_parse_data_from_video_packet_callback)(uint8_t *data,
-                                                           int size);
+    void (*native_parse_data_from_video_packet_callback)(uint8_t *data,
+                                                         int size);
 
     /*sync audio and video control field*/
 
@@ -194,6 +195,14 @@ static void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller,
                                      void *data);
 
 static void egl_buffer_queue_cb(void *data);
+
+static void audio_cached_que_clear_callback(void *data);
+
+static void video_cached_que_clear_callback(void *data);
+
+static void audio_decoded_que_clear_callback(void *data);
+
+static void video_decoded_que_clear_callback(void *data);
 
 
 /*consume audio data way*/

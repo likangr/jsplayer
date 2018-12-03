@@ -24,8 +24,8 @@ void JSEventHandler::call_on_intercepted_pcm_data(uint8_t *pcm_data, int len,
     LOGE("%s sample_num=%d,channel_num=%d", __func__,
          sample_num, channel_num);
 
-    if (m_native_js_player->m_native_intercepted_pcm_data_callback) {
-        m_native_js_player->m_native_intercepted_pcm_data_callback((jlong) m_native_js_player,
+    if (m_native_js_player->native_intercepted_pcm_data_callback) {
+        m_native_js_player->native_intercepted_pcm_data_callback((jlong) m_native_js_player,
                                                                    (short *) pcm_data,
                                                                    sample_num,
                                                                    channel_num);
@@ -35,16 +35,16 @@ void JSEventHandler::call_on_intercepted_pcm_data(uint8_t *pcm_data, int len,
         jshortArray pcm_short_array = env->NewShortArray(sample_num);
         env->SetShortArrayRegion(pcm_short_array, 0, sample_num, (jshort *) pcm_data);
 
-        js_jni_get_env(NULL)->CallVoidMethod(m_java_js_player, midOnInterceptedPcmData,
-                                             pcm_short_array, sample_num,
-                                             channel_num);
+        env->CallVoidMethod(m_java_js_player, midOnInterceptedPcmData,
+                            pcm_short_array, sample_num,
+                            channel_num);
         env->DeleteLocalRef(pcm_short_array);
     }
 }
 
 void JSEventHandler::call_on_parse_data_from_video_packet(uint8_t *data, int size) {
-    if (m_native_js_player->m_native_parse_data_from_video_packet_callback) {
-        m_native_js_player->m_native_parse_data_from_video_packet_callback(data, size);
+    if (m_native_js_player->native_parse_data_from_video_packet_callback) {
+        m_native_js_player->native_parse_data_from_video_packet_callback(data, size);
     }
 }
 

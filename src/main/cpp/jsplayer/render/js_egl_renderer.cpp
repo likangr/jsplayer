@@ -19,10 +19,13 @@ JSEglRenderer::~JSEglRenderer() {
     pthread_mutex_destroy(m_mutex);
     pthread_cond_destroy(m_start_render_cond);
     pthread_cond_destroy(m_create_surface_cond);
+    if (m_native_window) {
+        ANativeWindow_release(m_native_window);
+    }
 }
 
 
-void JSEglRenderer::release() {
+void JSEglRenderer::release_egl() {
     if (m_texture_yuv[0]) {
         glDeleteTextures(3, m_texture_yuv);
         memset(m_texture_yuv, 0, sizeof(m_texture_yuv));
@@ -162,12 +165,12 @@ void *render_thread(void *data) {
 
         pthread_mutex_unlock(renderer->m_mutex);
 
-        (*renderer->m_egl_buffer_queue_callback)(renderer->m_callback_data);
+        (*renderer->egl_buffer_queue_callback)(renderer->m_egl_buffer_queue_callback_data);
     }
 
 
     end:
-    renderer->release();
+    renderer->release_egl();
     if (renderer->m_native_window) {
         ANativeWindow_release(renderer->m_native_window);
         renderer->m_native_window = NULL;
@@ -176,8 +179,9 @@ void *render_thread(void *data) {
     pthread_exit(0);
 
     fail:
-    renderer->release();
-    renderer->m_js_event_handler->call_on_error(JS_EGL_RENDERER_SETUP_RENDERER_FAILED, 0, 0);
+    renderer->release_egl();
+    renderer->m_js_event_handler->call_on_error(JS_ERR_EGL_RENDERER_SETUP_RENDERER_FAILED, 0,
+                                                0);//fixme move to jsplayer.
     LOGE("egl thread exit unexpected.");
     renderer->m_is_renderer_thread_running = false;
     renderer->m_is_start_render = false;
@@ -394,15 +398,18 @@ void JSEglRenderer::render(AVFrame *frame) {
     }
 }
 
-void JSEglRenderer::set_egl_buffer_queue_callback(egl_buffer_queue_callback callback, void *data) {
-    m_callback_data = data;
-    m_egl_buffer_queue_callback = callback;
+void JSEglRenderer::set_egl_buffer_queue_callback(EGL_BUFFER_QUEUE_CALLBACK callback, void *data) {
+    m_egl_buffer_queue_callback_data = data;
+    egl_buffer_queue_callback = callback;
 }
 
 
 void JSEglRenderer::create_renderer_thread() {
     LOGD("create_renderer_thread...");
     pthread_mutex_lock(m_mutex);
+    if (m_is_renderer_thread_running) {
+        return;
+    }
     m_is_renderer_thread_running = true;
     pthread_create(&m_render_tid, NULL, render_thread, this);
     pthread_mutex_unlock(m_mutex);
@@ -410,10 +417,10 @@ void JSEglRenderer::create_renderer_thread() {
 
 void JSEglRenderer::destroy_renderer_thread() {
     LOGD("destroy_renderer_thread1...");
+    pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(m_mutex);
     m_is_renderer_thread_running = false;
     if (m_is_waiting_for_start_render) {
         pthread_cond_signal(m_start_render_cond);
@@ -473,10 +480,10 @@ void JSEglRenderer::destroy_surface() {
 
 void JSEglRenderer::start_render(int picture_width, int picture_height) {
     LOGD("start_render1...");
+    pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(m_mutex);
     m_picture_width = picture_width;
     m_picture_height = picture_height;
     m_is_start_render = true;
@@ -487,10 +494,10 @@ void JSEglRenderer::start_render(int picture_width, int picture_height) {
 
 void JSEglRenderer::stop_render() {
     LOGD("stop_render1...");
+    pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
     }
-    pthread_mutex_lock(m_mutex);
     m_is_start_render = false;
     pthread_mutex_unlock(m_mutex);
     while (!m_is_waiting_for_create_surface && !m_is_waiting_for_start_render);

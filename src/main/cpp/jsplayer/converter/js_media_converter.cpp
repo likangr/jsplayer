@@ -9,13 +9,12 @@ extern "C" {
 }
 
 
-#define RENDER_AV_FRAME_FORMAT AV_PIX_FMT_YUV420P
-
 unsigned int convert_simple_format_to_S16(uint8_t *audio_buf, AVFrame *frame) {
 
     SwrContext *swr_ctx;
 
-    swr_ctx = swr_alloc_set_opts(NULL, frame->channel_layout, DST_FORMAT, frame->sample_rate,
+    swr_ctx = swr_alloc_set_opts(NULL, frame->channel_layout, DEFAULT_AV_SAMPLE_FMT,
+                                 frame->sample_rate,
                                  frame->channel_layout,
                                  (enum AVSampleFormat) frame->format,
                                  frame->sample_rate, 0, NULL);
@@ -38,48 +37,39 @@ unsigned int convert_simple_format_to_S16(uint8_t *audio_buf, AVFrame *frame) {
     }
 
     int out_channels = av_get_channel_layout_nb_channels(frame->channel_layout);
-    int data_size = out_channels * nb * av_get_bytes_per_sample(DST_FORMAT);
+    int data_size = out_channels * nb * av_get_bytes_per_sample(DEFAULT_AV_SAMPLE_FMT);
 
     swr_free(&swr_ctx);
     return (unsigned int) data_size;
 }
 
 
-JS_RET convert_color_format(
-        JSMediaDecoderContext *ctx,
-        uint8_t *data,
-        size_t size,
-        AVFrame *frame) {
+JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
+                        JSMediaCodec *video_hw_dec,
+                        AVStream *av_stream,
+                        JSMediaCodecBufferInfo *info,
+                        AVFrame *frame,
+                        uint8_t *data,
+                        size_t size) {
 
     int ret;
-    int numBytes = 0;
-    uint8_t *buffer = NULL;
 
-    frame->width = ctx->width;
-    frame->height = ctx->height;
-    frame->format = RENDER_AV_FRAME_FORMAT;
+    av_frame_ref(frame, ctx->frame_buf);
 
+    //fixme maybe inaccuracy.
+    frame->key_frame = (info->flags &
+                        js_MediaCodec_getBufferFlagKeyFrame(video_hw_dec)) ? 1
+                                                                           : 0;
+    LOGD("%s frame->key_frame=%d", __func__, frame->key_frame);
 
-    //malloc frame reuse buffer
-    numBytes = av_image_get_buffer_size(RENDER_AV_FRAME_FORMAT, ctx->width, ctx->height, 1);
-    if (numBytes <= 0) {
-        LOGE("av_image_get_buffer_size failed numBytes:%d", numBytes);
-        goto fail;
+    if (av_stream->time_base.num && av_stream->time_base.den) {
+        frame->pts = av_rescale_q(info->presentationTimeUs, AV_TIME_BASE_Q,
+                                  av_stream->time_base);
+    } else {
+        frame->pts = info->presentationTimeUs;
     }
 
-    buffer = (uint8_t *) av_malloc((size_t) numBytes);
-    if (!buffer) {
-        LOGE("malloc buffer failed");
-        goto fail;
-    }
-
-    frame->opaque = buffer;
-    ret = av_image_fill_arrays(frame->data, frame->linesize, buffer,
-                               (AVPixelFormat) frame->format, ctx->width, ctx->height, 1);
-    if (ret < 0) {
-        LOGE("convert_color_format av_image_fill_arrays failed");
-        goto fail;
-    }
+    LOGD("%s js_MediaCodec_getOutputBuffer pts=%" PRId64, __func__, frame->pts);
 
 
     ret = ConvertToI420(data, size,
@@ -87,8 +77,8 @@ JS_RET convert_color_format(
                         frame->data[1], frame->linesize[1],
                         frame->data[2], frame->linesize[2],
                         0, 0,
-                        ctx->width, ctx->height,
-                        ctx->width, ctx->height,
+                        frame->width, frame->height,
+                        frame->width, frame->height,
                         libyuv::kRotate0, ctx->yuv_fourcc);
 
     if (ret != 0) {
@@ -97,17 +87,11 @@ JS_RET convert_color_format(
         } else {
             LOGE("ConvertToI420 failed don't know why.");
         }
-        goto fail;
+
+        return JS_ERR;
     }
 
     return JS_OK;
-
-    fail:
-    if (buffer) {
-        av_free(buffer);
-        frame->opaque = NULL;
-    }
-    return JS_ERR;
 }
 
 

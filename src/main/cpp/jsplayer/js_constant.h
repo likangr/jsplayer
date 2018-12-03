@@ -3,16 +3,23 @@
 
 /*error code*/
 typedef int JS_RET;
-#define JS_OK                                                    0         /* no error */
+#define JS_OK                                                   0         /* no error */
+#define JS_OK_NOT_DECODE_PACKET                                 JS_OK+1
+
 #define JS_ERR                                                  -1         /* generic error */
 #define JS_ERR_HW_DECODER_UNAVAILABLE                           JS_ERR-1
 #define JS_ERR_SW_DECODER_UNAVAILABLE                           JS_ERR-2
-
-#define JS_PLAYER_PREPARE_FAILED                                -10001
-#define JS_PLAYER_PLAY_AUDIO_FAILED                             -10002
-#define JS_PLAYER_READ_FRAME_FAILED                             -10003
-#define JS_EGL_RENDERER_SETUP_RENDERER_FAILED                   -10004
-#define JS_PLAYER_INTERCEPT_AUDIO_FAILED                        -10005
+#define JS_ERR_EOF                                              JS_ERR-4
+#define JS_ERR_EXTERNAL                                         JS_ERR-5
+#define JS_ERR_PREPARE_FAILED                                   JS_ERR-6
+#define JS_ERR_PLAY_AUDIO_FAILED                                JS_ERR-7
+#define JS_ERR_READ_FRAME_FAILED                                JS_ERR-8
+#define JS_ERR_EGL_RENDERER_SETUP_RENDERER_FAILED               JS_ERR-9
+#define JS_ERR_INTERCEPT_AUDIO_FAILED                           JS_ERR-10
+#define JS_ERR_TRY_AGAIN                                        JS_ERR-11
+#define JS_ERR_TRY_TO_USE_SW_DECODER                            JS_ERR-12
+#define JS_ERR_NEED_SEND_NEW_PACKET_AGAIN                       JS_ERR-13
+#define JS_ERR_NEED_SEND_THIS_PACKET_AGAIN                      JS_ERR-14
 
 /*io timeout*/
 #define DEFAULT_PREPARE_TIME_OUT_MICROSECONDS                   10000000//10s

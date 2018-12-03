@@ -1,11 +1,10 @@
 #include "js_java_mediacodec_wrapper.h"
-#include "js_ndk_mediacodec_proxy.h" //todo 函数指针优化，减少if else
+#include "js_ndk_mediacodec_proxy.h"
 #include "js_mediacodec_def.h"
 #include "util/js_jni.h"
 #include "util/js_log.h"
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
-
 
 struct JNIMediaCodecListFields {
 
@@ -398,13 +397,13 @@ struct JSMediaCodec {
     jobject input_buffers;
     jobject output_buffers;
 
-    int JS_INFO_TRY_AGAIN_LATER;
-    int JS_INFO_OUTPUT_BUFFERS_CHANGED;
-    int JS_INFO_OUTPUT_FORMAT_CHANGED;
+    int INFO_TRY_AGAIN_LATER;
+    int INFO_OUTPUT_BUFFERS_CHANGED;
+    int INFO_OUTPUT_FORMAT_CHANGED;
 
-    int JS_BUFFER_FLAG_CODEC_CONFIG;
-    int JS_BUFFER_FLAG_END_OF_STREAM;
-    int JS_BUFFER_FLAG_KEY_FRAME;
+    int BUFFER_FLAG_CODEC_CONFIG;
+    int BUFFER_FLAG_END_OF_STREAM;
+    int BUFFER_FLAG_KEY_FRAME;
 
     int JS_CONFIGURE_FLAG_ENCODE;
 
@@ -758,53 +757,49 @@ js_MediaCodecList_getCodecNameByType(const char *mime, int profile, int encoder,
 
 void *js_MediaFormat_new(void) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaFormat_new();
-    } else {
 
-        JNIEnv *env = NULL;
-        JSMediaFormat *format = NULL;
-        jobject object = NULL;
+    JNIEnv *env = NULL;
+    JSMediaFormat *format = NULL;
+    jobject object = NULL;
 
-        format = av_mallocz(sizeof(JSMediaFormat));
-        if (!format) {
-            return NULL;
-        }
-        format->
-                class = &mediaformat_class;
-
-        env = js_jni_get_env(format);
-        if (!env) {
-            av_freep(&format);
-            return NULL;
-        }
-
-        if (js_jni_init_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format) < 0) {
-            goto fail;
-        }
-
-        object = (*env)->NewObject(env, format->jfields.mediaformat_class, format->jfields.init_id);
-        if (!object) {
-            goto fail;
-        }
-
-        format->object = (*env)->NewGlobalRef(env, object);
-        if (!format->object) {
-            goto fail;
-        }
-
-        fail:
-        if (object) {
-            (*env)->DeleteLocalRef(env, object);
-        }
-
-        if (!format->object) {
-            js_jni_reset_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format);
-            av_freep(&format);
-        }
-
-        return format;
+    format = av_mallocz(sizeof(JSMediaFormat));
+    if (!format) {
+        return NULL;
     }
+    format->
+            class = &mediaformat_class;
+
+    env = js_jni_get_env(format);
+    if (!env) {
+        av_freep(&format);
+        return NULL;
+    }
+
+    if (js_jni_init_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format) < 0) {
+        goto fail;
+    }
+
+    object = (*env)->NewObject(env, format->jfields.mediaformat_class, format->jfields.init_id);
+    if (!object) {
+        goto fail;
+    }
+
+    format->object = (*env)->NewGlobalRef(env, object);
+    if (!format->object) {
+        goto fail;
+    }
+
+    fail:
+    if (object) {
+        (*env)->DeleteLocalRef(env, object);
+    }
+
+    if (!format->object) {
+        js_jni_reset_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format);
+        av_freep(&format);
+    }
+
+    return format;
 }
 
 static JSMediaFormat *js_MediaFormat_newFromObject(void *object) {
@@ -846,459 +841,402 @@ int js_MediaFormat_delete(void *pformat) {
     if (!pformat) {
         return 0;
     }
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaFormat_delete(pformat);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaFormat *format = pformat;
-        JNI_GET_ENV_OR_RETURN(env, format, AVERROR_EXTERNAL);
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaFormat *format = pformat;
+    JNI_GET_ENV_OR_RETURN(env, format, AVERROR_EXTERNAL);
 
-        (*env)->DeleteGlobalRef(env, format->object);
-        format->object = NULL;
+    (*env)->DeleteGlobalRef(env, format->object);
+    format->object = NULL;
 
-        js_jni_reset_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format);
+    js_jni_reset_jfields(env, &format->jfields, jni_mediaformat_mapping, 1, format);
 
-        av_freep(&format);
-        return ret;
-    }
+    av_freep(&format);
+    return ret;
 }
 
 char *js_MediaFormat_toString(void *pformat) {
 
     av_assert0(pformat != NULL);
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return (char *) AMediaFormat_toString(pformat);
+    char *ret = NULL;
 
-    } else {
-        char *ret = NULL;
+    JNIEnv *env = NULL;
+    jstring description = NULL;
+    JSMediaFormat *format = pformat;
 
-        JNIEnv *env = NULL;
-        jstring description = NULL;
-        JSMediaFormat *format = pformat;
+    JNI_GET_ENV_OR_RETURN(env, format, NULL);
 
-        JNI_GET_ENV_OR_RETURN(env, format, NULL);
-
-        description = (*env)->CallObjectMethod(env, format->object, format->jfields.to_string_id);
-        if (js_jni_exception_check(env, 1, NULL) < 0) {
-            goto fail;
-        }
-
-        ret = js_jni_jstring_to_utf_chars(env, description, format);
-        fail:
-        if (description) {
-            (*env)->DeleteLocalRef(env, description);
-        }
-
-        return ret;
-
+    description = (*env)->CallObjectMethod(env, format->object, format->jfields.to_string_id);
+    if (js_jni_exception_check(env, 1, NULL) < 0) {
+        goto fail;
     }
+
+    ret = js_jni_jstring_to_utf_chars(env, description, format);
+    fail:
+    if (description) {
+        (*env)->DeleteLocalRef(env, description);
+    }
+
+    return ret;
+
 }
 
 int js_MediaFormat_getInt32(void *pformat, const char *name, int32_t *out) {
 
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        return AMediaFormat_getInt32(pformat, name, out);
+    int ret = 1;
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    JSMediaFormat *format = pformat;
 
-    } else {
+    JNI_GET_ENV_OR_RETURN(env, format, 0);
 
-        int ret = 1;
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        JSMediaFormat *format = pformat;
-
-        JNI_GET_ENV_OR_RETURN(env, format, 0);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            ret = 0;
-            goto fail;
-        }
-
-        *out = (*env)->CallIntMethod(env, format->object, format->jfields.get_integer_id, key);
-        if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
-            ret = 0;
-            goto fail;
-        }
-
-        ret = 1;
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        return ret;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        ret = 0;
+        goto fail;
     }
+
+    *out = (*env)->CallIntMethod(env, format->object, format->jfields.get_integer_id, key);
+    if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
+        ret = 0;
+        goto fail;
+    }
+
+    ret = 1;
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    return ret;
 }
 
 int js_MediaFormat_getInt64(void *pformat, const char *name, int64_t *out) {
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
+    int ret = 1;
 
-        return AMediaFormat_getInt64(pformat, name, out);
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    JSMediaFormat *format = pformat;
 
-    } else {
-        int ret = 1;
+    JNI_GET_ENV_OR_RETURN(env, format, 0);
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        JSMediaFormat *format = pformat;
-
-        JNI_GET_ENV_OR_RETURN(env, format, 0);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            ret = 0;
-            goto fail;
-        }
-
-        *out = (*env)->CallLongMethod(env, format->object, format->jfields.get_long_id, key);
-        if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
-            ret = 0;
-            goto fail;
-        }
-
-        ret = 1;
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        return ret;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        ret = 0;
+        goto fail;
     }
+
+    *out = (*env)->CallLongMethod(env, format->object, format->jfields.get_long_id, key);
+    if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
+        ret = 0;
+        goto fail;
+    }
+
+    ret = 1;
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    return ret;
 }
 
 int js_MediaFormat_getFloat(void *pformat, const char *name, float *out) {
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
+    int ret = 1;
 
-        return AMediaFormat_getFloat(pformat, name, out);
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    JSMediaFormat *format = pformat;
 
-    } else {
-        int ret = 1;
+    JNI_GET_ENV_OR_RETURN(env, format, 0);
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        JSMediaFormat *format = pformat;
-
-        JNI_GET_ENV_OR_RETURN(env, format, 0);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            ret = 0;
-            goto fail;
-        }
-
-        *out = (*env)->CallFloatMethod(env, format->object, format->jfields.get_float_id, key);
-        if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
-            ret = 0;
-            goto fail;
-        }
-
-        ret = 1;
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        return ret;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        ret = 0;
+        goto fail;
     }
+
+    *out = (*env)->CallFloatMethod(env, format->object, format->jfields.get_float_id, key);
+    if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
+        ret = 0;
+        goto fail;
+    }
+
+    ret = 1;
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    return ret;
 }
 
 int
 js_MediaFormat_getBuffer(void *pformat, const char *name, void **data, size_t *size) {
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
+    int ret = 1;
 
-        return AMediaFormat_getBuffer(pformat, name, data, size);
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    jobject result = NULL;
+    JSMediaFormat *format = pformat;
 
-    } else {
-        int ret = 1;
+    JNI_GET_ENV_OR_RETURN(env, format, 0);
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        jobject result = NULL;
-        JSMediaFormat *format = pformat;
-
-        JNI_GET_ENV_OR_RETURN(env, format, 0);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            ret = 0;
-            goto fail;
-        }
-
-        result = (*env)->CallObjectMethod(env, format->object, format->jfields.get_bytebuffer_id,
-                                          key);
-        if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
-            ret = 0;
-            goto fail;
-        }
-
-        *data = (*env)->GetDirectBufferAddress(env, result);
-        *size = (*env)->GetDirectBufferCapacity(env, result);
-
-        if (*data && *size) {
-            void *src = *data;
-            *data = av_malloc(*size);
-            if (!*data) {
-                ret = 0;
-                goto fail;
-            }
-
-            memcpy(*data, src, *size);
-        }
-
-        ret = 1;
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        if (result) {
-            (*env)->DeleteLocalRef(env, result);
-        }
-
-        return ret;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        ret = 0;
+        goto fail;
     }
+
+    result = (*env)->CallObjectMethod(env, format->object, format->jfields.get_bytebuffer_id,
+                                      key);
+    if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
+        ret = 0;
+        goto fail;
+    }
+
+    *data = (*env)->GetDirectBufferAddress(env, result);
+    *size = (*env)->GetDirectBufferCapacity(env, result);
+
+    if (*data && *size) {
+        void *src = *data;
+        *data = av_malloc(*size);
+        if (!*data) {
+            ret = 0;
+            goto fail;
+        }
+
+        memcpy(*data, src, *size);
+    }
+
+    ret = 1;
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    if (result) {
+        (*env)->DeleteLocalRef(env, result);
+    }
+
+    return ret;
 }
 
 int js_MediaFormat_getString(void *pformat, const char *name, const char **out) {
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
+    int ret = 1;
 
-        return AMediaFormat_getString(pformat, name, out);
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    jstring result = NULL;
 
-    } else {
-        int ret = 1;
+    JSMediaFormat *format = pformat;
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        jstring result = NULL;
+    JNI_GET_ENV_OR_RETURN(env, format, 0);
 
-        JSMediaFormat *format = pformat;
-
-        JNI_GET_ENV_OR_RETURN(env, format, 0);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            ret = 0;
-            goto fail;
-        }
-
-        result = (*env)->CallObjectMethod(env, format->object, format->jfields.get_string_id, key);
-        if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
-            ret = 0;
-            goto fail;
-        }
-
-        *out = js_jni_jstring_to_utf_chars(env, result, format);
-        if (!*out) {
-            ret = 0;
-            goto fail;
-        }
-
-        ret = 1;
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        if (result) {
-            (*env)->DeleteLocalRef(env, result);
-        }
-
-        return ret;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        ret = 0;
+        goto fail;
     }
+
+    result = (*env)->CallObjectMethod(env, format->object, format->jfields.get_string_id, key);
+    if ((ret = js_jni_exception_check(env, 1, format)) < 0) {
+        ret = 0;
+        goto fail;
+    }
+
+    *out = js_jni_jstring_to_utf_chars(env, result, format);
+    if (!*out) {
+        ret = 0;
+        goto fail;
+    }
+
+    ret = 1;
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    if (result) {
+        (*env)->DeleteLocalRef(env, result);
+    }
+
+    return ret;
 }
 
 void js_MediaFormat_setInt32(void *pformat, const char *name, int32_t value) {
 
     av_assert0(pformat != NULL);
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        AMediaFormat_setInt32(pformat, name, value);
-    } else {
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        JSMediaFormat *format = pformat;
-        JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            goto fail;
-        }
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    JSMediaFormat *format = pformat;
+    JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        (*env)->CallVoidMethod(env, format->object, format->jfields.set_integer_id, key, value);
-        if (js_jni_exception_check(env, 1, format) < 0) {
-            goto fail;
-        }
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        goto fail;
+    }
 
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
+    (*env)->CallVoidMethod(env, format->object, format->jfields.set_integer_id, key, value);
+    if (js_jni_exception_check(env, 1, format) < 0) {
+        goto fail;
+    }
+
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
     }
 }
 
 void js_MediaFormat_setInt64(void *pformat, const char *name, int64_t value) {
     av_assert0(pformat != NULL);
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        AMediaFormat_setInt64(pformat, name, value);
-    } else {
-        JNIEnv *env = NULL;
-        jstring key = NULL;
 
-        JSMediaFormat *format = pformat;
+    JNIEnv *env = NULL;
+    jstring key = NULL;
 
-        JNI_GET_ENV_OR_RETURN_VOID(env, format);
+    JSMediaFormat *format = pformat;
 
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            goto fail;
-        }
+    JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        (*env)->CallVoidMethod(env, format->object, format->jfields.set_long_id, key, value);
-        if (js_jni_exception_check(env, 1, format) < 0) {
-            goto fail;
-        }
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        goto fail;
+    }
 
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
+    (*env)->CallVoidMethod(env, format->object, format->jfields.set_long_id, key, value);
+    if (js_jni_exception_check(env, 1, format) < 0) {
+        goto fail;
+    }
+
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
     }
 }
 
 void js_MediaFormat_setFloat(void *pformat, const char *name, float value) {
     av_assert0(pformat != NULL);
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        AMediaFormat_setFloat(pformat, name, value);
-    } else {
-        JNIEnv *env = NULL;
-        jstring key = NULL;
 
-        JSMediaFormat *format = pformat;
+    JNIEnv *env = NULL;
+    jstring key = NULL;
 
-        JNI_GET_ENV_OR_RETURN_VOID(env, format);
+    JSMediaFormat *format = pformat;
 
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            goto fail;
-        }
+    JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        (*env)->CallVoidMethod(env, format->object, format->jfields.set_float_id, key, value);
-        if (js_jni_exception_check(env, 1, format) < 0) {
-            goto fail;
-        }
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        goto fail;
+    }
 
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
+    (*env)->CallVoidMethod(env, format->object, format->jfields.set_float_id, key, value);
+    if (js_jni_exception_check(env, 1, format) < 0) {
+        goto fail;
+    }
+
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
     }
 }
 
 void js_MediaFormat_setString(void *pformat, const char *name, const char *value) {
     av_assert0(pformat != NULL);
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        AMediaFormat_setString(pformat, name, value);
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    jstring string = NULL;
+    JSMediaFormat *format = pformat;
 
-    } else {
+    JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        jstring string = NULL;
-        JSMediaFormat *format = pformat;
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        goto fail;
+    }
 
-        JNI_GET_ENV_OR_RETURN_VOID(env, format);
+    string = js_jni_utf_chars_to_jstring(env, value, format);
+    if (!string) {
+        goto fail;
+    }
 
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            goto fail;
-        }
+    (*env)->CallVoidMethod(env, format->object, format->jfields.set_string_id, key, string);
+    if (js_jni_exception_check(env, 1, format) < 0) {
+        goto fail;
+    }
 
-        string = js_jni_utf_chars_to_jstring(env, value, format);
-        if (!string) {
-            goto fail;
-        }
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
 
-        (*env)->CallVoidMethod(env, format->object, format->jfields.set_string_id, key, string);
-        if (js_jni_exception_check(env, 1, format) < 0) {
-            goto fail;
-        }
-
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        if (string) {
-            (*env)->DeleteLocalRef(env, string);
-        }
+    if (string) {
+        (*env)->DeleteLocalRef(env, string);
     }
 }
+
 
 void
 js_MediaFormat_setBuffer(void *pformat, const char *name, void *data, size_t size) {
 
     av_assert0(pformat != NULL);
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        AMediaFormat_setBuffer(pformat, name, data, size);
-    } else {
+    JNIEnv *env = NULL;
+    jstring key = NULL;
+    jobject buffer = NULL;
+    void *buffer_data = NULL;
 
-        JNIEnv *env = NULL;
-        jstring key = NULL;
-        jobject buffer = NULL;
-        void *buffer_data = NULL;
+    JSMediaFormat *format = pformat;
+    JNI_GET_ENV_OR_RETURN_VOID(env, format);
 
-        JSMediaFormat *format = pformat;
-        JNI_GET_ENV_OR_RETURN_VOID(env, format);
-
-        key = js_jni_utf_chars_to_jstring(env, name, format);
-        if (!key) {
-            goto fail;
-        }
-
-        if (!data || !size) {
-            goto fail;
-        }
-
-        buffer_data = av_malloc(size);
-        if (!buffer_data) {
-            goto fail;
-        }
-
-        memcpy(buffer_data, data, size);
-
-        buffer = (*env)->NewDirectByteBuffer(env, buffer_data, size);
-        if (!buffer) {
-            goto fail;
-        }
-
-        (*env)->CallVoidMethod(env, format->object, format->jfields.set_bytebuffer_id, key, buffer);
-        if (js_jni_exception_check(env, 1, format) < 0) {
-            goto fail;
-        }
-
-        fail:
-        if (key) {
-            (*env)->DeleteLocalRef(env, key);
-        }
-
-        if (buffer) {
-            (*env)->DeleteLocalRef(env, buffer);
-        }
+    key = js_jni_utf_chars_to_jstring(env, name, format);
+    if (!key) {
+        goto fail;
     }
+
+    if (!data || !size) {
+        goto fail;
+    }
+
+    buffer_data = av_malloc(size);
+    if (!buffer_data) {
+        goto fail;
+    }
+
+    memcpy(buffer_data, data, size);
+
+    buffer = (*env)->NewDirectByteBuffer(env, buffer_data, size);
+    if (!buffer) {
+        goto fail;
+    }
+
+    (*env)->CallVoidMethod(env, format->object, format->jfields.set_bytebuffer_id, key, buffer);
+    if (js_jni_exception_check(env, 1, format) < 0) {
+        goto fail;
+    }
+
+    fail:
+    if (key) {
+        (*env)->DeleteLocalRef(env, key);
+    }
+
+    if (buffer) {
+        (*env)->DeleteLocalRef(env, buffer);
+    }
+
 }
 
 static int codec_init_static_fields(JSMediaCodec *codec) {
@@ -1307,31 +1245,31 @@ static int codec_init_static_fields(JSMediaCodec *codec) {
 
     JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-    codec->JS_INFO_TRY_AGAIN_LATER = (*env)->GetStaticIntField(env,
-                                                               codec->jfields.mediacodec_class,
-                                                               codec->jfields.info_try_again_later_id);
+    codec->INFO_TRY_AGAIN_LATER = (*env)->GetStaticIntField(env,
+                                                            codec->jfields.mediacodec_class,
+                                                            codec->jfields.info_try_again_later_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
 
-    codec->JS_BUFFER_FLAG_CODEC_CONFIG = (*env)->GetStaticIntField(env,
-                                                                   codec->jfields.mediacodec_class,
-                                                                   codec->jfields.buffer_flag_codec_config_id);
+    codec->BUFFER_FLAG_CODEC_CONFIG = (*env)->GetStaticIntField(env,
+                                                                codec->jfields.mediacodec_class,
+                                                                codec->jfields.buffer_flag_codec_config_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
 
-    codec->JS_BUFFER_FLAG_END_OF_STREAM = (*env)->GetStaticIntField(env,
-                                                                    codec->jfields.mediacodec_class,
-                                                                    codec->jfields.buffer_flag_end_of_stream_id);
+    codec->BUFFER_FLAG_END_OF_STREAM = (*env)->GetStaticIntField(env,
+                                                                 codec->jfields.mediacodec_class,
+                                                                 codec->jfields.buffer_flag_end_of_stream_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
 
     if (codec->jfields.buffer_flag_key_frame_id) {
-        codec->JS_BUFFER_FLAG_KEY_FRAME = (*env)->GetStaticIntField(env,
-                                                                    codec->jfields.mediacodec_class,
-                                                                    codec->jfields.buffer_flag_key_frame_id);
+        codec->BUFFER_FLAG_KEY_FRAME = (*env)->GetStaticIntField(env,
+                                                                 codec->jfields.mediacodec_class,
+                                                                 codec->jfields.buffer_flag_key_frame_id);
         if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
             goto fail;
         }
@@ -1344,23 +1282,23 @@ static int codec_init_static_fields(JSMediaCodec *codec) {
         goto fail;
     }
 
-    codec->JS_INFO_TRY_AGAIN_LATER = (*env)->GetStaticIntField(env,
-                                                               codec->jfields.mediacodec_class,
-                                                               codec->jfields.info_try_again_later_id);
+    codec->INFO_TRY_AGAIN_LATER = (*env)->GetStaticIntField(env,
+                                                            codec->jfields.mediacodec_class,
+                                                            codec->jfields.info_try_again_later_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
 
-    codec->JS_INFO_OUTPUT_BUFFERS_CHANGED = (*env)->GetStaticIntField(env,
-                                                                      codec->jfields.mediacodec_class,
-                                                                      codec->jfields.info_output_buffers_changed_id);
+    codec->INFO_OUTPUT_BUFFERS_CHANGED = (*env)->GetStaticIntField(env,
+                                                                   codec->jfields.mediacodec_class,
+                                                                   codec->jfields.info_output_buffers_changed_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
 
-    codec->JS_INFO_OUTPUT_FORMAT_CHANGED = (*env)->GetStaticIntField(env,
-                                                                     codec->jfields.mediacodec_class,
-                                                                     codec->jfields.info_output_format_changed_id);
+    codec->INFO_OUTPUT_FORMAT_CHANGED = (*env)->GetStaticIntField(env,
+                                                                  codec->jfields.mediacodec_class,
+                                                                  codec->jfields.info_output_format_changed_id);
     if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
         goto fail;
     }
@@ -1372,218 +1310,206 @@ static int codec_init_static_fields(JSMediaCodec *codec) {
 
 void *js_MediaCodec_createCodecByName(const char *name) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_createCodecByName(name);
 
-    } else {
+    int ret = -1;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = NULL;
+    jstring codec_name = NULL;
+    jobject object = NULL;
 
-        int ret = -1;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = NULL;
-        jstring codec_name = NULL;
-        jobject object = NULL;
-
-        codec = av_mallocz(sizeof(JSMediaCodec));
-        if (!codec) {
-            return NULL;
-        }
-        codec->class = &mediacodec_class;
-
-        env = js_jni_get_env(codec);
-        if (!env) {
-            av_freep(&codec);
-            return NULL;
-        }
-
-        if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
-            goto fail;
-        }
-
-        codec_name = js_jni_utf_chars_to_jstring(env, name, codec);
-        if (!codec_name) {
-            goto fail;
-        }
-
-        object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
-                                                codec->jfields.create_by_codec_name_id, codec_name);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            goto fail;
-        }
-
-        codec->object = (*env)->NewGlobalRef(env, object);
-        if (!codec->object) {
-            goto fail;
-        }
-
-        if (codec_init_static_fields(codec) < 0) {
-            goto fail;
-        }
-
-        if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
-            codec->has_get_i_o_buffer = 1;
-        }
-
-        ret = 0;
-        fail:
-        if (codec_name) {
-            (*env)->DeleteLocalRef(env, codec_name);
-        }
-
-        if (object) {
-            (*env)->DeleteLocalRef(env, object);
-        }
-
-        if (ret < 0) {
-            js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
-            av_freep(&codec);
-        }
-
-        return codec;
+    codec = av_mallocz(sizeof(JSMediaCodec));
+    if (!codec) {
+        return NULL;
     }
+    codec->class = &mediacodec_class;
+
+    env = js_jni_get_env(codec);
+    if (!env) {
+        av_freep(&codec);
+        return NULL;
+    }
+
+    if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
+        goto fail;
+    }
+
+    codec_name = js_jni_utf_chars_to_jstring(env, name, codec);
+    if (!codec_name) {
+        goto fail;
+    }
+
+    object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
+                                            codec->jfields.create_by_codec_name_id, codec_name);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        goto fail;
+    }
+
+    codec->object = (*env)->NewGlobalRef(env, object);
+    if (!codec->object) {
+        goto fail;
+    }
+
+    if (codec_init_static_fields(codec) < 0) {
+        goto fail;
+    }
+
+    if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
+        codec->has_get_i_o_buffer = 1;
+    }
+
+    ret = 0;
+    fail:
+    if (codec_name) {
+        (*env)->DeleteLocalRef(env, codec_name);
+    }
+
+    if (object) {
+        (*env)->DeleteLocalRef(env, object);
+    }
+
+    if (ret < 0) {
+        js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
+        av_freep(&codec);
+    }
+
+    return codec;
 }
+
 
 void *js_MediaCodec_createDecoderByType(const char *mime) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_createDecoderByType(mime);
 
-    } else {
 
-        int ret = -1;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = NULL;
-        jstring mime_type = NULL;
-        jobject object = NULL;
+    int ret = -1;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = NULL;
+    jstring mime_type = NULL;
+    jobject object = NULL;
 
-        codec = av_mallocz(sizeof(JSMediaCodec));
-        if (!codec) {
-            return NULL;
-        }
-        codec->class = &mediacodec_class;
-
-        env = js_jni_get_env(codec);
-        if (!env) {
-            av_freep(&codec);
-            return NULL;
-        }
-
-        if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
-            goto fail;
-        }
-
-        mime_type = js_jni_utf_chars_to_jstring(env, mime, codec);
-        if (!mime_type) {
-            goto fail;
-        }
-
-        object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
-                                                codec->jfields.create_decoder_by_type_id,
-                                                mime_type);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            goto fail;
-        }
-
-        codec->object = (*env)->NewGlobalRef(env, object);
-        if (!codec->object) {
-            goto fail;
-        }
-
-        if (codec_init_static_fields(codec) < 0) {
-            goto fail;
-        }
-
-        if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
-            codec->has_get_i_o_buffer = 1;
-        }
-
-        ret = 0;
-        fail:
-        if (mime_type) {
-            (*env)->DeleteLocalRef(env, mime_type);
-        }
-
-        if (object) {
-            (*env)->DeleteLocalRef(env, object);
-        }
-
-        if (ret < 0) {
-            js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
-            av_freep(&codec);
-        }
-
-        return codec;
+    codec = av_mallocz(sizeof(JSMediaCodec));
+    if (!codec) {
+        return NULL;
     }
+    codec->class = &mediacodec_class;
+
+    env = js_jni_get_env(codec);
+    if (!env) {
+        av_freep(&codec);
+        return NULL;
+    }
+
+    if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
+        goto fail;
+    }
+
+    mime_type = js_jni_utf_chars_to_jstring(env, mime, codec);
+    if (!mime_type) {
+        goto fail;
+    }
+
+    object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
+                                            codec->jfields.create_decoder_by_type_id,
+                                            mime_type);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        goto fail;
+    }
+
+    codec->object = (*env)->NewGlobalRef(env, object);
+    if (!codec->object) {
+        goto fail;
+    }
+
+    if (codec_init_static_fields(codec) < 0) {
+        goto fail;
+    }
+
+    if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
+        codec->has_get_i_o_buffer = 1;
+    }
+
+    ret = 0;
+    fail:
+    if (mime_type) {
+        (*env)->DeleteLocalRef(env, mime_type);
+    }
+
+    if (object) {
+        (*env)->DeleteLocalRef(env, object);
+    }
+
+    if (ret < 0) {
+        js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
+        av_freep(&codec);
+    }
+
+    return codec;
 }
 
+
 void *js_MediaCodec_createEncoderByType(const char *mime) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_createEncoderByType(mime);
 
-    } else {
-        int ret = -1;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = NULL;
-        jstring mime_type = NULL;
-        jobject object = NULL;
+    int ret = -1;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = NULL;
+    jstring mime_type = NULL;
+    jobject object = NULL;
 
-        codec = av_mallocz(sizeof(JSMediaCodec));
-        if (!codec) {
-            return NULL;
-        }
-        codec->
-                class = &mediacodec_class;
-
-        env = js_jni_get_env(codec);
-        if (!env) {
-            av_freep(&codec);
-            return NULL;
-        }
-
-        if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
-            goto fail;
-        }
-
-        mime_type = js_jni_utf_chars_to_jstring(env, mime, codec);
-        if (!mime_type) {
-            goto fail;
-        }
-
-        object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
-                                                codec->jfields.create_encoder_by_type_id,
-                                                mime_type);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            goto fail;
-        }
-
-        codec->object = (*env)->NewGlobalRef(env, object);
-        if (!codec->object) {
-            goto fail;
-        }
-
-        if (codec_init_static_fields(codec) < 0) {
-            goto fail;
-        }
-
-        if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
-            codec->has_get_i_o_buffer = 1;
-        }
-
-        ret = 0;
-        fail:
-        if (mime_type) {
-            (*env)->DeleteLocalRef(env, mime_type);
-        }
-
-        if (object) {
-            (*env)->DeleteLocalRef(env, object);
-        }
-
-        if (ret < 0) {
-            js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
-            av_freep(&codec);
-        }
-
-        return codec;
+    codec = av_mallocz(sizeof(JSMediaCodec));
+    if (!codec) {
+        return NULL;
     }
+    codec->class = &mediacodec_class;
+
+    env = js_jni_get_env(codec);
+    if (!env) {
+        av_freep(&codec);
+        return NULL;
+    }
+
+    if (js_jni_init_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec) < 0) {
+        goto fail;
+    }
+
+    mime_type = js_jni_utf_chars_to_jstring(env, mime, codec);
+    if (!mime_type) {
+        goto fail;
+    }
+
+    object = (*env)->CallStaticObjectMethod(env, codec->jfields.mediacodec_class,
+                                            codec->jfields.create_encoder_by_type_id,
+                                            mime_type);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        goto fail;
+    }
+
+    codec->object = (*env)->NewGlobalRef(env, object);
+    if (!codec->object) {
+        goto fail;
+    }
+
+    if (codec_init_static_fields(codec) < 0) {
+        goto fail;
+    }
+
+    if (codec->jfields.get_input_buffer_id && codec->jfields.get_output_buffer_id) {
+        codec->has_get_i_o_buffer = 1;
+    }
+
+    ret = 0;
+    fail:
+    if (mime_type) {
+        (*env)->DeleteLocalRef(env, mime_type);
+    }
+
+    if (object) {
+        (*env)->DeleteLocalRef(env, object);
+    }
+
+    if (ret < 0) {
+        js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
+        av_freep(&codec);
+    }
+
+    return codec;
 }
 
 int js_MediaCodec_delete(void *pcodec) {
@@ -1591,30 +1517,25 @@ int js_MediaCodec_delete(void *pcodec) {
     if (!pcodec) {
         return 0;
     }
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        return AMediaCodec_delete(pcodec);
-
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-        }
-
-        (*env)->DeleteGlobalRef(env, codec->object);
-        codec->object = NULL;
-
-        js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
-
-        av_freep(&codec);
-        return ret;
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
     }
 
+    (*env)->DeleteGlobalRef(env, codec->object);
+    codec->object = NULL;
+
+    js_jni_reset_jfields(env, &codec->jfields, jni_mediacodec_mapping, 1, codec);
+
+    av_freep(&codec);
+    return ret;
 }
+
 
 char *js_MediaCodec_getName(JSMediaCodec *codec) {
     char *ret = NULL;
@@ -1637,411 +1558,369 @@ char *js_MediaCodec_getName(JSMediaCodec *codec) {
 int js_MediaCodec_configure(void *pcodec, const void *pformat, void *surface,
                             void *crypto, uint32_t flags) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_configure(pcodec, pformat, surface, crypto, flags);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        const JSMediaFormat *format = pformat;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    const JSMediaFormat *format = pformat;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.configure_id, format->object,
-                               surface,
-                               NULL, flags);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.configure_id, format->object,
+                           surface,
+                           NULL, flags);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
 
+    fail:
+    return ret;
 }
 
 int js_MediaCodec_start(void *pcodec) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_start(pcodec);
-
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.start_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.start_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
 
+
 int js_MediaCodec_stop(void *pcodec) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_stop(pcodec);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.stop_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.stop_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
 
 int js_MediaCodec_flush(void *pcodec) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_flush(pcodec);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.flush_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.flush_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
 
 int js_MediaCodec_releaseOutputBuffer(void *pcodec, size_t idx, int render) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_releaseOutputBuffer(pcodec, idx, render);
-    } else {
 
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_output_buffer_id,
-                               (jint) idx,
-                               (jboolean) render);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_output_buffer_id,
+                           (jint) idx,
+                           (jboolean) render);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
 
 int js_MediaCodec_releaseOutputBufferAtTime(void *pcodec, size_t idx,
                                             int64_t timestampNs) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_releaseOutputBufferAtTime(pcodec, idx, timestampNs);
-    } else {
 
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.release_output_buffer_at_time_id,
-                               (jint) idx, timestampNs);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object,
+                           codec->jfields.release_output_buffer_at_time_id,
+                           (jint) idx, timestampNs);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
 
 ssize_t js_MediaCodec_dequeueInputBuffer(void *pcodec, int64_t timeoutUs) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_dequeueInputBuffer(pcodec,
-                                              timeoutUs);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        ret = (*env)->CallIntMethod(env, codec->object, codec->jfields.dequeue_input_buffer_id,
-                                    timeoutUs);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        fail:
-        return ret;
+    ret = (*env)->CallIntMethod(env, codec->object, codec->jfields.dequeue_input_buffer_id,
+                                timeoutUs);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
 }
+
 
 int js_MediaCodec_queueInputBuffer(void *pcodec, size_t idx, off_t offset, size_t size,
                                    uint64_t time, uint32_t flags) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        return AMediaCodec_queueInputBuffer(pcodec, idx, offset, size,
-                                            time, flags);
-    } else {
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
-
-        (*env)->CallVoidMethod(env, codec->object, codec->jfields.queue_input_buffer_id, (jint) idx,
-                               (jint) offset, (jint) size, time, flags);
-        if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        fail:
-        return ret;
+    (*env)->CallVoidMethod(env, codec->object, codec->jfields.queue_input_buffer_id,
+                           (jint) idx,
+                           (jint) offset, (jint) size, time, flags);
+    if ((ret = js_jni_exception_check(env, 1, codec)) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    fail:
+    return ret;
+
 }
 
 ssize_t js_MediaCodec_dequeueOutputBuffer(void *pcodec, JSMediaCodecBufferInfo *info,
                                           int64_t timeoutUs) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
 
-        return AMediaCodec_dequeueOutputBuffer(pcodec, info,
-                                               timeoutUs);
-    } else {
-        int ret = 0;
-        JNIEnv *env = NULL;
-        JSMediaCodec *codec = pcodec;
-        jobject mediainfo = NULL;
+    int ret = 0;
+    JNIEnv *env = NULL;
+    JSMediaCodec *codec = pcodec;
+    jobject mediainfo = NULL;
 
-        JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
+    JNI_GET_ENV_OR_RETURN(env, codec, AVERROR_EXTERNAL);
 
-        mediainfo = (*env)->NewObject(env, codec->jfields.mediainfo_class, codec->jfields.init_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        ret = (*env)->CallIntMethod(env, codec->object, codec->jfields.dequeue_output_buffer_id,
-                                    mediainfo, timeoutUs);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        info->flags = (*env)->GetIntField(env, mediainfo, codec->jfields.flags_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        info->offset = (*env)->GetIntField(env, mediainfo, codec->jfields.offset_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        info->presentationTimeUs = (*env)->GetLongField(env, mediainfo,
-                                                        codec->jfields.presentation_time_us_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-
-        info->size = (*env)->GetIntField(env, mediainfo, codec->jfields.size_id);
-        if (js_jni_exception_check(env, 1, codec) < 0) {
-            ret = AVERROR_EXTERNAL;
-            goto fail;
-        }
-        fail:
-        if (mediainfo) {
-            (*env)->DeleteLocalRef(env, mediainfo);
-        }
-
-        return ret;
+    mediainfo = (*env)->NewObject(env, codec->jfields.mediainfo_class,
+                                  codec->jfields.init_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
     }
+
+    ret = (*env)->CallIntMethod(env, codec->object, codec->jfields.dequeue_output_buffer_id,
+                                mediainfo, timeoutUs);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }
+
+    info->flags = (*env)->GetIntField(env, mediainfo, codec->jfields.flags_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }
+
+    info->offset = (*env)->GetIntField(env, mediainfo, codec->jfields.offset_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }
+
+    info->presentationTimeUs = (*env)->GetLongField(env, mediainfo,
+                                                    codec->jfields.presentation_time_us_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }
+
+    info->size = (*env)->GetIntField(env, mediainfo, codec->jfields.size_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        ret = AVERROR_EXTERNAL;
+        goto fail;
+    }
+    fail:
+    if (mediainfo) {
+        (*env)->DeleteLocalRef(env, mediainfo);
+    }
+
+    return ret;
 }
+
 
 uint8_t *js_MediaCodec_getInputBuffer(void *pcodec, size_t idx, size_t *out_size) {
 
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_getInputBuffer(pcodec, idx, out_size);
-    } else {
 
-        uint8_t *ret = NULL;
-        JNIEnv *env = NULL;
+    uint8_t *ret = NULL;
+    JNIEnv *env = NULL;
 
-        jobject buffer = NULL;
-        jobject input_buffers = NULL;
-        JSMediaCodec *codec = pcodec;
+    jobject buffer = NULL;
+    jobject input_buffers = NULL;
+    JSMediaCodec *codec = pcodec;
 
-        JNI_GET_ENV_OR_RETURN(env, codec, NULL);
+    JNI_GET_ENV_OR_RETURN(env, codec, NULL);
 
-        if (codec->has_get_i_o_buffer) {
-            buffer = (*env)->CallObjectMethod(env, codec->object,
-                                              codec->jfields.get_input_buffer_id,
-                                              (jint) idx);
-            if (js_jni_exception_check(env, 1, codec) < 0) {
-                goto fail;
-            }
-        } else {
-            if (!codec->input_buffers) {
-                input_buffers = (*env)->CallObjectMethod(env, codec->object,
-                                                         codec->jfields.get_input_buffers_id);
-                if (js_jni_exception_check(env, 1, codec) < 0) {
-                    goto fail;
-                }
-
-                codec->input_buffers = (*env)->NewGlobalRef(env, input_buffers);
-                if (js_jni_exception_check(env, 1, codec) < 0) {
-                    goto fail;
-                }
-            }
-
-            buffer = (*env)->GetObjectArrayElement(env, codec->input_buffers, idx);
-            if (js_jni_exception_check(env, 1, codec) < 0) {
-                goto fail;
-            }
-        }
-
-        ret = (*env)->GetDirectBufferAddress(env, buffer);
-        *out_size = (*env)->GetDirectBufferCapacity(env, buffer);
-        fail:
-        if (buffer) {
-            (*env)->DeleteLocalRef(env, buffer);
-        }
-
-        if (input_buffers) {
-            (*env)->DeleteLocalRef(env, input_buffers);
-        }
-
-        return ret;
-    }
-}
-
-uint8_t *js_MediaCodec_getOutputBuffer(void *pcodec, size_t idx, size_t *out_size) {
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_getOutputBuffer(pcodec, idx, out_size);
-    } else {
-
-        uint8_t *ret = NULL;
-        JNIEnv *env = NULL;
-
-        jobject buffer = NULL;
-        jobject output_buffers = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNI_GET_ENV_OR_RETURN(env, codec, NULL);
-
-        if (codec->has_get_i_o_buffer) {
-            buffer = (*env)->CallObjectMethod(env, codec->object,
-                                              codec->jfields.get_output_buffer_id,
-                                              (jint) idx);
-            if (js_jni_exception_check(env, 1, codec) < 0) {
-                goto fail;
-            }
-        } else {
-            if (!codec->output_buffers) {
-                output_buffers = (*env)->CallObjectMethod(env, codec->object,
-                                                          codec->jfields.get_output_buffers_id);
-                if (js_jni_exception_check(env, 1, codec) < 0) {
-                    goto fail;
-                }
-
-                codec->output_buffers = (*env)->NewGlobalRef(env, output_buffers);
-                if (js_jni_exception_check(env, 1, codec) < 0) {
-                    goto fail;
-                }
-            }
-
-            buffer = (*env)->GetObjectArrayElement(env, codec->output_buffers, idx);
-            if (js_jni_exception_check(env, 1, codec) < 0) {
-                goto fail;
-            }
-        }
-
-        ret = (*env)->GetDirectBufferAddress(env, buffer);
-        *out_size = (*env)->GetDirectBufferCapacity(env, buffer);
-        fail:
-        if (buffer) {
-            (*env)->DeleteLocalRef(env, buffer);
-        }
-
-        if (output_buffers) {
-            (*env)->DeleteLocalRef(env, output_buffers);
-        }
-
-        return ret;
-
-    }
-}
-
-void *js_MediaCodec_getOutputFormat(void *pcodec) {
-
-    if (__JS_NDK_MEDIACODEC_LINKED__) {
-        return AMediaCodec_getOutputFormat(pcodec);
-    } else {
-
-        JSMediaFormat *ret = NULL;
-        JSMediaCodec *codec = pcodec;
-        JNIEnv *env = NULL;
-        jobject mediaformat = NULL;
-
-        JNI_GET_ENV_OR_RETURN(env, codec, NULL);
-
-        mediaformat = (*env)->CallObjectMethod(env, codec->object,
-                                               codec->jfields.get_output_format_id);
+    if (codec->has_get_i_o_buffer) {
+        buffer = (*env)->CallObjectMethod(env, codec->object,
+                                          codec->jfields.get_input_buffer_id,
+                                          (jint) idx);
         if (js_jni_exception_check(env, 1, codec) < 0) {
             goto fail;
         }
+    } else {
+        if (!codec->input_buffers) {
+            input_buffers = (*env)->CallObjectMethod(env, codec->object,
+                                                     codec->jfields.get_input_buffers_id);
+            if (js_jni_exception_check(env, 1, codec) < 0) {
+                goto fail;
+            }
 
-        ret = js_MediaFormat_newFromObject(mediaformat);
-        fail:
-        if (mediaformat) {
-            (*env)->DeleteLocalRef(env, mediaformat);
+            codec->input_buffers = (*env)->NewGlobalRef(env, input_buffers);
+            if (js_jni_exception_check(env, 1, codec) < 0) {
+                goto fail;
+            }
         }
 
-        return ret;
+        buffer = (*env)->GetObjectArrayElement(env, codec->input_buffers, idx);
+        if (js_jni_exception_check(env, 1, codec) < 0) {
+            goto fail;
+        }
     }
+
+    ret = (*env)->GetDirectBufferAddress(env, buffer);
+    *out_size = (*env)->GetDirectBufferCapacity(env, buffer);
+    fail:
+    if (buffer) {
+        (*env)->DeleteLocalRef(env, buffer);
+    }
+
+    if (input_buffers) {
+        (*env)->DeleteLocalRef(env, input_buffers);
+    }
+
+    return ret;
 }
 
+
+uint8_t *js_MediaCodec_getOutputBuffer(void *pcodec, size_t idx, size_t *out_size) {
+
+    uint8_t *ret = NULL;
+    JNIEnv *env = NULL;
+
+    jobject buffer = NULL;
+    jobject output_buffers = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNI_GET_ENV_OR_RETURN(env, codec, NULL);
+
+    if (codec->has_get_i_o_buffer) {
+        buffer = (*env)->CallObjectMethod(env, codec->object,
+                                          codec->jfields.get_output_buffer_id,
+                                          (jint) idx);
+        if (js_jni_exception_check(env, 1, codec) < 0) {
+            goto fail;
+        }
+    } else {
+        if (!codec->output_buffers) {
+            output_buffers = (*env)->CallObjectMethod(env, codec->object,
+                                                      codec->jfields.get_output_buffers_id);
+            if (js_jni_exception_check(env, 1, codec) < 0) {
+                goto fail;
+            }
+
+            codec->output_buffers = (*env)->NewGlobalRef(env, output_buffers);
+            if (js_jni_exception_check(env, 1, codec) < 0) {
+                goto fail;
+            }
+        }
+
+        buffer = (*env)->GetObjectArrayElement(env, codec->output_buffers, idx);
+        if (js_jni_exception_check(env, 1, codec) < 0) {
+            goto fail;
+        }
+    }
+
+    ret = (*env)->GetDirectBufferAddress(env, buffer);
+    *out_size = (*env)->GetDirectBufferCapacity(env, buffer);
+    fail:
+    if (buffer) {
+        (*env)->DeleteLocalRef(env, buffer);
+    }
+
+    if (output_buffers) {
+        (*env)->DeleteLocalRef(env, output_buffers);
+    }
+
+    return ret;
+
+}
+
+
+void *js_MediaCodec_getOutputFormat(void *pcodec) {
+
+
+    JSMediaFormat *ret = NULL;
+    JSMediaCodec *codec = pcodec;
+    JNIEnv *env = NULL;
+    jobject mediaformat = NULL;
+
+    JNI_GET_ENV_OR_RETURN(env, codec, NULL);
+
+    mediaformat = (*env)->CallObjectMethod(env, codec->object,
+                                           codec->jfields.get_output_format_id);
+    if (js_jni_exception_check(env, 1, codec) < 0) {
+        goto fail;
+    }
+
+    ret = js_MediaFormat_newFromObject(mediaformat);
+    fail:
+    if (mediaformat) {
+        (*env)->DeleteLocalRef(env, mediaformat);
+    }
+
+    return ret;
+}
+
+
 int js_MediaCodec_getInfoTryAgainLater(JSMediaCodec *codec) {
-    return codec->JS_INFO_TRY_AGAIN_LATER;
+    return codec->INFO_TRY_AGAIN_LATER;
 }
 
 int js_MediaCodec_getInfoOutputBuffersChanged(JSMediaCodec *codec) {
-    return codec->JS_INFO_OUTPUT_BUFFERS_CHANGED;
+    return codec->INFO_OUTPUT_BUFFERS_CHANGED;
 }
 
 int js_MediaCodec_getInfoOutputFormatChanged(JSMediaCodec *codec) {
-    return codec->JS_INFO_OUTPUT_FORMAT_CHANGED;
+    return codec->INFO_OUTPUT_FORMAT_CHANGED;
 }
 
 
 int js_MediaCodec_getBufferFlagCodecConfig(JSMediaCodec *codec) {
-    return codec->JS_BUFFER_FLAG_CODEC_CONFIG;
+    return codec->BUFFER_FLAG_CODEC_CONFIG;
 }
 
 int js_MediaCodec_getBufferFlagEndOfStream(JSMediaCodec *codec) {
-    return codec->JS_BUFFER_FLAG_END_OF_STREAM;
+    return codec->BUFFER_FLAG_END_OF_STREAM;
 }
 
 int js_MediaCodec_getBufferFlagKeyFrame(JSMediaCodec *codec) {
-    return codec->JS_BUFFER_FLAG_KEY_FRAME;
+    return codec->BUFFER_FLAG_KEY_FRAME;
 }
 
 int js_MediaCodec_getConfigureFlagEncode(JSMediaCodec *codec) {

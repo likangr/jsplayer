@@ -1,4 +1,5 @@
 #include "js_media_hw_decoder_context.h"
+#include "converter/js_media_converter.h"
 #include "js_mediacodec_def.h"
 
 extern "C" {
@@ -19,6 +20,10 @@ JSMediaDecoderContext::~JSMediaDecoderContext() {
 
     if (format) {
         js_MediaFormat_delete(format);
+    }
+
+    if (frame_buf) {
+        av_frame_free(&frame_buf);
     }
 
 }
@@ -55,7 +60,19 @@ JS_RET JSMediaDecoderContext::update_pix_fmt() {
 
 
 JS_RET JSMediaDecoderContext::update_media_decoder_context() {
-    int ret;
+    JS_RET ret;
+
+    if (frame_buf) {
+        av_frame_free(&frame_buf);
+    }
+
+    frame_buf = av_frame_alloc();
+
+    if (!frame_buf) {
+        return JS_ERR;
+    }
+
+
     const char *str_format = NULL;
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_WIDTH, &width);
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_HEIGHT, &height);
@@ -66,6 +83,17 @@ JS_RET JSMediaDecoderContext::update_media_decoder_context() {
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_CROP_TOP, &crop_top);
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_CROP_RIGHT, &crop_right);
     js_MediaFormat_getInt32(format, JS_MEDIAFORMAT_KEY_CROP_BOTTOM, &crop_bottom);
+
+
+    frame_buf->width = width;
+    frame_buf->height = height;
+    frame_buf->format = DEFAULT_AV_PIX_FMT;
+
+    //todo how to set align value.
+    if (av_frame_get_buffer(frame_buf, 0) != 0) {
+        LOGE("%s  av_frame_get_buffer failed", __func__);
+        return JS_ERR;
+    }
 
     ret = update_pix_fmt();
     if (ret != JS_OK) {

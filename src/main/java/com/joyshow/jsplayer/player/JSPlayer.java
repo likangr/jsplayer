@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.Surface;
@@ -16,6 +17,8 @@ import android.widget.FrameLayout;
 import com.joyshow.jsplayer.Constant;
 import com.joyshow.jsplayer.utils.Logger;
 import com.joyshow.jsplayer.utils.StackTraceInfo;
+
+import java.io.File;
 
 
 /**

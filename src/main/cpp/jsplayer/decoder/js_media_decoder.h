@@ -11,8 +11,8 @@ extern "C" {
 
 class JSMediaDecoder;
 
-typedef AVFrame *(JSMediaDecoder::*DECODE_PACKET_FUNC)(AVPacket *avpkt);
-
+typedef JS_RET (JSMediaDecoder::*DECODE_PACKET_FUNC)(AVPacket *avpkt,
+                                                     AVFrame *frame);
 typedef void (JSMediaDecoder::*FLUSH_FUNC)();
 
 
@@ -24,24 +24,23 @@ public:
 
     ~JSMediaDecoder();
 
+    void reset();
+
     void set_decoder_type(const char *decoder_type);
 
     JS_RET (JSMediaDecoder::*m_create_decoder_by_av_stream)(AVStream *av_stream);
 
-    DECODE_PACKET_FUNC m_decode_video_packet;
-    DECODE_PACKET_FUNC m_decode_audio_packet;
+    DECODE_PACKET_FUNC decode_video_packet;
+    DECODE_PACKET_FUNC decode_audio_packet;
 
-    FLUSH_FUNC m_video_flush;
-    FLUSH_FUNC m_audio_flush;
+    FLUSH_FUNC video_decoder_flush;
+    FLUSH_FUNC audio_decoder_flush;
 
 private:
 
-    char *m_decoder_type;
+    char *m_decoder_type = NULL;
 
     JSEventHandler *m_js_event_handler = NULL;
-
-    AVFrame *m_video_reuse_frame = NULL;
-    AVFrame *m_audio_reuse_frame = NULL;
 
     JSMediaDecoderContext *m_video_hw_dec_ctx = NULL, *m_audio_hw_dec_ctx = NULL;
     void *m_video_hw_dec = NULL, *m_audio_hw_dec = NULL;
@@ -62,20 +61,26 @@ private:
 
     JS_RET create_hw_decoder_by_av_stream(AVStream *av_stream);
 
-    JS_RET process_hw_decode(AVPacket *avpkt,
-                             AVFrame *frame);
+    JS_RET mediacodecdec_receive_frame(AVFrame *frame);
+
+    JS_RET mediacodecdec_send_packet(AVPacket *avpkt);
 
 
-    AVFrame *decode_audio_packet_with_hw(AVPacket *avpkt);
+    JS_RET decode_audio_packet_with_hw(AVPacket *avpkt,
+                                       AVFrame *frame);
 
-    AVFrame *decode_audio_packet_with_sw(AVPacket *avpkt);
+    JS_RET decode_audio_packet_with_sw(AVPacket *avpkt,
+                                       AVFrame *frame);
 
-    AVFrame *decode_video_packet_with_hw(AVPacket *avpkt);
+    JS_RET decode_video_packet_with_hw(AVPacket *avpkt,
+                                       AVFrame *frame);
 
-    AVFrame *decode_video_packet_with_sw(AVPacket *avpkt);
+    JS_RET decode_video_packet_with_sw(AVPacket *avpkt,
+                                       AVFrame *frame);
 
-    inline AVFrame *decode_packet_with_sw_internal(AVCodecContext *avctx, AVPacket *avpkt,
-                                                   AVFrame *frame);
+    JS_RET decode_packet_with_sw_internal(AVCodecContext *avctx,
+                                          AVPacket *avpkt,
+                                          AVFrame *frame);
 
     void audio_sw_decoder_flush();
 

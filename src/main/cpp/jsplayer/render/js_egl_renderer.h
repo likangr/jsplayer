@@ -55,7 +55,7 @@ enum AttribEnum {
     ATTRIB_TEXTURE,
 };
 
-typedef void (*egl_buffer_queue_callback)(void *data);
+typedef void (*EGL_BUFFER_QUEUE_CALLBACK)(void *data);
 
 class JSEglRenderer {
 
@@ -82,13 +82,13 @@ public:
 
     void destroy_renderer_thread();
 
-    void release();
+    void release_egl();
 
 //    void window_size_changed(int width, int height);
 
     void render(AVFrame *frame);
 
-    void set_egl_buffer_queue_callback(egl_buffer_queue_callback callback, void *data);
+    void set_egl_buffer_queue_callback(EGL_BUFFER_QUEUE_CALLBACK callback, void *data);
 
 //    volatile bool m_is_window_size_changed = false;
     volatile int m_window_width = 0;
@@ -98,8 +98,8 @@ public:
 
     JSEventHandler *m_js_event_handler = NULL;
 
-    egl_buffer_queue_callback m_egl_buffer_queue_callback;
-    void *m_callback_data;
+    EGL_BUFFER_QUEUE_CALLBACK egl_buffer_queue_callback;
+    void *m_egl_buffer_queue_callback_data;
 
     pthread_mutex_t m_mutex0, *m_mutex = &m_mutex0;
     pthread_cond_t m_start_render_cond0, *m_start_render_cond = &m_start_render_cond0;

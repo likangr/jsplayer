@@ -20,9 +20,17 @@ public :
 
     JS_RET enqueue(const void *buffer, unsigned int size);
 
+    JS_RET clear();
+    
+    void set_mute(bool mute);
+
+    void set_volume(int volume);
+
+    void set_channel_mute(int channel, bool mute);
+
     void set_audio_buffer_queue_callback(slAndroidSimpleBufferQueueCallback callback);
 
-    void release();
+    void reset();
 
 
     // engine interfaces
@@ -41,7 +49,7 @@ public :
     SLObjectItf m_output_mix_object = NULL;
     SLEnvironmentalReverbItf m_output_mix_environmental_reverb = NULL;
 
-    slAndroidSimpleBufferQueueCallback m_callback = NULL;
+    slAndroidSimpleBufferQueueCallback sl_android_simple_buffer_queue_callback = NULL;
 
     // aux effect on the output mix, used by the buffer m_dequeue player
     const SLEnvironmentalReverbSettings m_reverb_settings =
@@ -60,11 +68,6 @@ public :
 
     uint8_t m_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
 
-    void set_mute(bool mute);
-
-    void set_volume(int volume);
-
-    void set_channel_mute(int channel, bool mute);
 };
 
 #endif //JS_AUDIOPLAYER_H

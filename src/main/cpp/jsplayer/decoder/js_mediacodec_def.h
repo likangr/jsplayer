@@ -13,17 +13,6 @@ using namespace libyuv;
 
 #endif
 
-#define BUFFER_FLAG_KEY_FRAME  1
-
-enum {
-    AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM = 4,
-    AMEDIACODEC_CONFIGURE_FLAG_ENCODE = 1,
-    AMEDIACODEC_INFO_OUTPUT_BUFFERS_CHANGED = -3,
-    AMEDIACODEC_INFO_OUTPUT_FORMAT_CHANGED = -2,
-    AMEDIACODEC_INFO_TRY_AGAIN_LATER = -1,
-};
-
-
 /**
 * Enumeration defining possible uncompressed image/video formats.
 *

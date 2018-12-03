@@ -5,6 +5,7 @@
 #include <sys/types.h>
 
 extern "C" {
+#include "libavutil/frame.h"
 #include "libavutil/pixfmt.h"
 }
 
@@ -43,9 +44,7 @@ public:
     size_t nal_size = 0;
 
 
-    //audio
-
-
+    AVFrame *frame_buf = NULL;
 private:
     JS_RET update_pix_fmt();
 };
