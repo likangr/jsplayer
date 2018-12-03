@@ -132,8 +132,8 @@ public:
     AVStream *m_video_stream = NULL;
     bool m_has_audio_stream = false;
     bool m_has_video_stream = false;
-    JSQueue<AVPacket *> *m_audio_cached_que = NULL, *m_video_cached_que = NULL;
-    JSQueue<AVFrame *> *m_audio_decoded_que = NULL, *m_video_decoded_que = NULL;
+    JSPacketQueue *m_audio_cached_que = NULL, *m_video_cached_que = NULL;
+    JSFrameQueue *m_audio_decoded_que = NULL, *m_video_decoded_que = NULL;
 
     int64_t m_timing = 0;
     int m_io_time_out = 0;
