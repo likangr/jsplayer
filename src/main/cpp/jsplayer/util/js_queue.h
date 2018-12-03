@@ -37,13 +37,15 @@ public:
 
     void set_clear_callback(CLEAR_CALLBACK clear_callback, void *data);
 
-    JS_RET (JSQueue::*put)(T element);
+    virtual void clear(bool is_keep_signal_element)=0;
+
+    int64_t get_num();
 
     virtual int64_t get_duration()=0;
 
-    virtual void clear(bool is_keep_signal_element)=0;
-
     virtual T get()=0;
+
+    JS_RET (JSQueue::*put)(T element);
 
     void abort_get();
 
@@ -53,7 +55,6 @@ public:
 
     void clear_abort_put();
 
-    int64_t get_num();
 
     deque<T> m_dequeue0, *m_dequeue = &m_dequeue0;
 
@@ -75,9 +76,7 @@ public:
     int64_t m_max_duration = -1;
     bool m_is_live;
 
-    int64_t m_buffer_size = 0;
     int64_t m_buffer_duration = 0;
-    int64_t m_num = 0;
 
     CLEAR_CALLBACK clear_callback = NULL;
     void *m_clear_callback_data = NULL;
@@ -118,7 +117,7 @@ void JSQueue<T>::set_clear_callback(CLEAR_CALLBACK callback, void *data) {
 template<class T>
 int64_t JSQueue<T>::get_num() {
     pthread_mutex_lock(m_mutex);
-    int64_t num = m_dequeue->size();//fixme 自己算
+    int64_t num = m_dequeue->size();
     pthread_mutex_unlock(m_mutex);
     return num;
 }
@@ -256,20 +255,16 @@ public:
         AVPacket *first = NULL;
         int64_t duration = 0;
 
-        if (m_dequeue->empty()) {
+        if (m_dequeue->size() <= 1) {
             goto return0;
         }
 
         last = m_dequeue->back();
         first = m_dequeue->front();
 
-        if (last != NULL && first != NULL && last != first) {
-            duration = (int64_t) ((last->dts - first->dts) * av_q2d(m_time_base) * 1000000);
-            pthread_mutex_unlock(m_mutex);
-            return duration;
-        } else {
-            goto return0;
-        }
+        duration = (int64_t) ((last->dts - first->dts) * av_q2d(m_time_base) * 1000000);
+        pthread_mutex_unlock(m_mutex);
+        return duration;
 
         return0:
         pthread_mutex_unlock(m_mutex);
@@ -333,19 +328,19 @@ public:
 
         *src = *avpkt;
 
+        bool is_drop = false;
         if (m_is_need_to_drop_until_i_frame) {
 
             if (src->flags & AV_PKT_FLAG_KEY) {
                 m_is_need_to_drop_until_i_frame = false;
-                m_dequeue->push_back(src);
-            } else if (src->size == 0) {
-                m_dequeue->push_back(src);
-            } else {
+            } else if (src->size != 0) {
                 av_packet_free(&src);
                 LOGD("*drop* drop a non-key frame until key video packet.");
+                is_drop = true;
             }
 
-        } else {
+        }
+        if (!is_drop) {
             m_dequeue->push_back(src);
         }
 
@@ -507,20 +502,16 @@ public:
         AVFrame *first = NULL;
         int64_t duration = 0;
 
-        if (m_dequeue->empty()) {
+        if (m_dequeue->size() <= 1) {
             goto return0;
         }
 
         last = m_dequeue->back();
         first = m_dequeue->front();
 
-        if (last != NULL && first != NULL && last != first) {
-            duration = (int64_t) ((last->pts - first->pts) * av_q2d(m_time_base) * 1000000);
-            pthread_mutex_unlock(m_mutex);
-            return duration;
-        } else {
-            goto return0;
-        }
+        duration = (int64_t) ((last->pts - first->pts) * av_q2d(m_time_base) * 1000000);
+        pthread_mutex_unlock(m_mutex);
+        return duration;
 
         return0:
         pthread_mutex_unlock(m_mutex);

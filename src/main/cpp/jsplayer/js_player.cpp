@@ -565,9 +565,9 @@ JS_RET JSPlayer::cache_live_video_packet_not_hold_surface(AVPacket *src) {
     LOGD("*drop* clear video packet.");
     m_video_decoded_que->clear(false);
     LOGD("*drop* clear video frame.");
-//
+
 //    if (JS_OK !=
-//        m_video_cached_que->put(m_video_cached_que, flush_pkt)) {
+//        (m_video_cached_que->*m_video_cached_que->put)(flush_pkt)) {
 //        LOGE("can't put video flush packet.");
 //        m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
 //    }
