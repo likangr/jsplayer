@@ -167,10 +167,9 @@ void *render_thread(void *data) {
 //                       renderer->m_window_height);
 //            renderer->m_is_window_size_changed = false;
 //        }
-        pthread_mutex_unlock(renderer->m_mutex);
 
         (*renderer->egl_buffer_queue_callback)(renderer->m_egl_buffer_queue_callback_data);
-
+        pthread_mutex_unlock(renderer->m_mutex);
     }
 
 
