@@ -150,6 +150,7 @@ public:
 
 
     volatile bool m_is_playing = false;
+    volatile bool m_is_buffering = false;
     volatile bool m_is_reading_frame = false;
     volatile bool m_is_audio_data_consuming = false;
 
@@ -204,6 +205,13 @@ static void audio_decoded_que_clear_callback(void *data);
 
 static void video_decoded_que_clear_callback(void *data);
 
+static void audio_cached_que_buffering_callback(void *data, bool is_buffering);
+
+static void video_cached_que_buffering_callback(void *data, bool is_buffering);
+
+static void audio_decoded_que_buffering_callback(void *data, bool is_buffering);
+
+static void video_decoded_que_buffering_callback(void *data, bool is_buffering);
 
 /*consume audio data way*/
 

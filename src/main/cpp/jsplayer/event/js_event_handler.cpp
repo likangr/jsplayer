@@ -26,9 +26,9 @@ void JSEventHandler::call_on_intercepted_pcm_data(uint8_t *pcm_data, int len,
 
     if (m_native_js_player->native_intercepted_pcm_data_callback) {
         m_native_js_player->native_intercepted_pcm_data_callback((jlong) m_native_js_player,
-                                                                   (short *) pcm_data,
-                                                                   sample_num,
-                                                                   channel_num);
+                                                                 (short *) pcm_data,
+                                                                 sample_num,
+                                                                 channel_num);
 
     } else {
         JNIEnv *env = js_jni_get_env(NULL);
@@ -67,6 +67,10 @@ void JSEventHandler::call_on_info(int what, int arg1, int arg2) {
 
 void JSEventHandler::call_on_completed() {
     js_jni_get_env(NULL)->CallVoidMethod(m_java_js_player, midOnCompleted);
+}
+
+void JSEventHandler::call_on_buffering(bool is_buffering) {
+    js_jni_get_env(NULL)->CallVoidMethod(m_java_js_player, midOnBuffering, is_buffering);
 }
 
 

@@ -13,6 +13,7 @@ jmethodID midOnInterceptedPcmData;
 jmethodID midOnError;
 jmethodID midOnInfo;
 jmethodID midOnCompleted;
+jmethodID midOnBuffering;
 
 static JNINativeMethod js_player_methods[] = {
         {"nativeSetupJNI",                                  "()V",                                      (void *) native_setup_jni},
@@ -341,5 +342,6 @@ void JS_JNI_CALL register_js_player_methods(JNIEnv *env) {
     midOnError = env->GetMethodID(cls, "onError", "(III)V");
     midOnInfo = env->GetMethodID(cls, "onInfo", "(III)V");
     midOnCompleted = env->GetMethodID(cls, "onCompleted", "()V");
+    midOnBuffering = env->GetMethodID(cls, "onBuffering", "(Z)V");
 
 }

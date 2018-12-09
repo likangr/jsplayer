@@ -20,6 +20,7 @@ typedef int JS_RET;
 #define JS_ERR_TRY_TO_USE_SW_DECODER                            JS_ERR-12
 #define JS_ERR_NEED_SEND_NEW_PACKET_AGAIN                       JS_ERR-13
 #define JS_ERR_NEED_SEND_THIS_PACKET_AGAIN                      JS_ERR-14
+#define JS_ERR_EGL_RENDERER_RENDER_FAILED                       JS_ERR-15
 
 /*io timeout*/
 #define DEFAULT_PREPARE_TIME_OUT_MICROSECONDS                   10000000//10s

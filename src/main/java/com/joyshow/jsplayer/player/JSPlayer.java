@@ -5,7 +5,6 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.os.Build;
-import android.os.Environment;
 import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.Surface;
@@ -17,8 +16,6 @@ import android.widget.FrameLayout;
 import com.joyshow.jsplayer.Constant;
 import com.joyshow.jsplayer.utils.Logger;
 import com.joyshow.jsplayer.utils.StackTraceInfo;
-
-import java.io.File;
 
 
 /**
@@ -37,6 +34,7 @@ public class JSPlayer extends FrameLayout {
     private OnErrorListener mOnErrorListener;
     private OnInfoListener mOnInfoListener;
     private OnCompletedListener mOnCompletedListener;
+    private OnBufferingListener mOnBufferingListener;
     private OnInterceptedPcmDataCallback mOnInterceptedPcmDataCallback;
 
     public enum ChannelIndex {
@@ -68,7 +66,7 @@ public class JSPlayer extends FrameLayout {
 
     private void init() {
         setKeepScreenOn(true);
-        createPlayer();
+        createPlayer();//fixme 懒加载。
         mJSRenderView = new JSSurfaceView(getContext());
         addView(mJSRenderView);
     }
@@ -415,6 +413,8 @@ public class JSPlayer extends FrameLayout {
 //        url="rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov";
 //        url="http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4";
 //        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
+//        url = "http://jdvideo.51joyshow.com/live/1126058980742028_20181207/index.m3u8?starttime=1544112000&endtime=1544198399";
+//        url = "http://182.106.233.3/9223372036854775807/1391046160500/video/上江6.1大联欢.mp4";
         setUrl(mNativePlayer, url);
     }
 
@@ -590,11 +590,20 @@ public class JSPlayer extends FrameLayout {
     }
 
     /**
-     * prepared listener.
+     * completed listener.
      */
     public interface OnCompletedListener {
 
         void onCompleted(JSPlayer player);
+
+    }
+
+    /**
+     * buffering listener.
+     */
+    public interface OnBufferingListener {
+
+        void onBuffering(JSPlayer player, boolean isBuffering);
 
     }
 
@@ -693,6 +702,26 @@ public class JSPlayer extends FrameLayout {
         }
     }
 
+    /**
+     * called by native.
+     */
+    private void onBuffering(final boolean isBuffering) {
+        if (mOnBufferingListener != null) {
+            mMainThreadHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    synchronized (JSPlayer.this) {
+                        if (isDestroyed()) {
+                            Logger.w(TAG, "call onCompleted failed,player is destroyed.");
+                            return;
+                        }
+                        mOnBufferingListener.onBuffering(JSPlayer.this, isBuffering);
+                    }
+                }
+            });
+        }
+    }
+
 
     /**
      * set on intercepted pcm data listener.
@@ -738,6 +767,15 @@ public class JSPlayer extends FrameLayout {
      */
     public void setOnCompletedListener(OnCompletedListener listener) {
         mOnCompletedListener = listener;
+    }
+
+    /**
+     * set on completed listener.
+     *
+     * @param listener
+     */
+    public void setOnBufferingListener(OnBufferingListener listener) {
+        mOnBufferingListener = listener;
     }
 
 

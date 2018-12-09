@@ -76,7 +76,7 @@ public:
 
     JS_RET init_renderer();
 
-    void start_render(int picture_width, int picture_height);
+    void start_render();
 
     void stop_render();
 
@@ -84,6 +84,9 @@ public:
 
     void release_egl();
 
+    int query_surface_width();
+
+    int query_surface_height();
 //    void window_size_changed(int width, int height);
 
     void render(AVFrame *frame);
@@ -93,8 +96,6 @@ public:
 //    volatile bool m_is_window_size_changed = false;
     volatile int m_window_width = 0;
     volatile int m_window_height = 0;
-    volatile int m_picture_width = 0;
-    volatile int m_picture_height = 0;
 
     JSEventHandler *m_js_event_handler = NULL;
 

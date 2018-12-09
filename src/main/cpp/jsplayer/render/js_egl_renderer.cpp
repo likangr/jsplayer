@@ -49,7 +49,27 @@ void JSEglRenderer::release_egl() {
         eglTerminate(m_display);
         m_display = NULL;
     }
+//    eglReleaseThread();fixme
 }
+
+int JSEglRenderer::query_surface_width() {
+    EGLint width = 0;
+    if (!eglQuerySurface(m_display, m_surface, EGL_WIDTH, &width)) {
+        LOGE("[EGL] eglQuerySurface(EGL_WIDTH) returned error %d", eglGetError());
+        return 0;
+    }
+    return width;
+}
+
+int JSEglRenderer::query_surface_height() {
+    EGLint height = 0;
+    if (!eglQuerySurface(m_display, m_surface, EGL_HEIGHT, &height)) {
+        LOGE("[EGL] eglQuerySurface(EGL_HEIGHT) returned error %d", eglGetError());
+        return 0;
+    }
+    return height;
+}
+
 
 void *render_thread(void *data) {
     pthread_setname_np(pthread_self(), __func__);
@@ -103,6 +123,18 @@ void *render_thread(void *data) {
                 renderer->m_surface = NULL;
             }
 
+
+            //fixme is need ANativeWindow_setBuffersGeometry?
+//            int32_t width = ANativeWindow_getWidth(renderer->m_native_window);
+//            int32_t height = ANativeWindow_getWidth(renderer->m_native_window);
+//            int ret = ANativeWindow_setBuffersGeometry(renderer->m_native_window, width, height,
+//                                                       renderer->m_format);
+//            if (ret) {
+//                LOGE("ANativeWindow_setBuffersGeometry() returned error %d", ret);
+//                goto fail;
+//            }
+
+
             if (!(renderer->m_surface = eglCreateWindowSurface(renderer->m_display,
                                                                renderer->m_config,
                                                                renderer->m_native_window,
@@ -117,34 +149,6 @@ void *render_thread(void *data) {
                 goto fail;
             }
 
-            //fixme 0,0
-            int ret = ANativeWindow_setBuffersGeometry(
-                    renderer->m_native_window,
-                    0,
-                    0,
-                    renderer->m_format);
-            if (ret) {
-                LOGE("ANativeWindow_setBuffersGeometry(format) returned error %d", ret);
-                goto fail;
-            }
-
-
-            int window_width = ANativeWindow_getWidth(renderer->m_native_window);
-            int window_height = ANativeWindow_getHeight(renderer->m_native_window);
-
-            if (window_width != renderer->m_window_width ||
-                window_height != renderer->m_window_height) {
-
-                renderer->m_window_width = window_width;
-                renderer->m_window_height = window_height;
-
-                LOGD("glViewport m_window_width=%d,m_window_height=%d",
-                     renderer->m_window_width,
-                     renderer->m_window_height);
-
-                glViewport(0, 0, renderer->m_window_width, renderer->m_window_height);
-            }
-
             if (renderer->init_renderer() != JS_OK) {
                 LOGE("JSEglRenderer failed to init_renderer");
                 goto fail;
@@ -152,6 +156,7 @@ void *render_thread(void *data) {
 
             renderer->m_has_new_surface = false;
         }
+
 
 //        if (renderer->m_is_window_size_changed) {
 //            LOGD("glViewport m_window_width=%d,m_window_height=%d",
@@ -162,10 +167,10 @@ void *render_thread(void *data) {
 //                       renderer->m_window_height);
 //            renderer->m_is_window_size_changed = false;
 //        }
-
         pthread_mutex_unlock(renderer->m_mutex);
 
         (*renderer->egl_buffer_queue_callback)(renderer->m_egl_buffer_queue_callback_data);
+
     }
 
 
@@ -181,7 +186,7 @@ void *render_thread(void *data) {
     fail:
     renderer->release_egl();
     renderer->m_js_event_handler->call_on_error(JS_ERR_EGL_RENDERER_SETUP_RENDERER_FAILED, 0,
-                                                0);//fixme move to jsplayer.
+                                                0);
     LOGE("egl thread exit unexpected.");
     renderer->m_is_renderer_thread_running = false;
     renderer->m_is_start_render = false;
@@ -374,10 +379,33 @@ JS_RET JSEglRenderer::use_configured_program() {
 
 void JSEglRenderer::render(AVFrame *frame) {
 
+    const int heights[3] = {frame->height, frame->height / 2, frame->height / 2};
+
+    m_window_width = query_surface_width();
+    m_window_height = query_surface_height();
+
+    if (m_window_width != frame->width || m_window_height != frame->height) {
+        int ret = ANativeWindow_setBuffersGeometry(m_native_window,
+                                                   frame->width,
+                                                   frame->height,
+                                                   m_format);
+
+        if (ret) {
+            LOGE("ANativeWindow_setBuffersGeometry(format) returned error %d", ret);
+            goto failed;
+        }
+
+        m_window_width = query_surface_width();
+        m_window_height = query_surface_height();
+    }
+
+
+    glViewport(0, 0, m_window_width,
+               m_window_height);
+
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    const int heights[3] = {frame->height, frame->height / 2, frame->height / 2};
 
     for (int i = 0; i < 3; i++) {
         glBindTexture(GL_TEXTURE_2D, m_texture_yuv[i]);
@@ -395,7 +423,13 @@ void JSEglRenderer::render(AVFrame *frame) {
 
     if (!eglSwapBuffers(m_display, m_surface)) {
         LOGW("eglSwapBuffers() returned error %d", eglGetError());
+        goto failed;
     }
+
+    return;
+
+    failed:
+    m_js_event_handler->call_on_error(JS_ERR_EGL_RENDERER_RENDER_FAILED, 0, 0);
 }
 
 void JSEglRenderer::set_egl_buffer_queue_callback(EGL_BUFFER_QUEUE_CALLBACK callback, void *data) {
@@ -444,7 +478,7 @@ void JSEglRenderer::create_surface(jobject surface) {
     m_has_new_surface = true;
     pthread_mutex_unlock(m_mutex);
 }
-//
+
 //void JSEglRenderer::window_size_changed(int width, int height) {
 //
 //    pthread_mutex_lock(m_mutex);
@@ -478,14 +512,12 @@ void JSEglRenderer::destroy_surface() {
 }
 
 
-void JSEglRenderer::start_render(int picture_width, int picture_height) {
+void JSEglRenderer::start_render() {
     LOGD("start_render1...");
     pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
     }
-    m_picture_width = picture_width;
-    m_picture_height = picture_height;
     m_is_start_render = true;
     pthread_cond_signal(m_start_render_cond);
     pthread_mutex_unlock(m_mutex);

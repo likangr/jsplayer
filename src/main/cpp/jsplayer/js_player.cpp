@@ -86,9 +86,7 @@ void JSPlayer::play(bool is_to_resume) {
 
         start_decode_video();
 
-        AVCodecParameters *codecpar = m_video_stream->codecpar;
-        m_egl_renderer->start_render(codecpar->width,
-                                     codecpar->height);
+        m_egl_renderer->start_render();
         LOGD("start_render...");
     }
     m_cur_play_status = PLAY_STATUS_PLAYING;
@@ -286,6 +284,7 @@ JS_RET JSPlayer::prepare_audio() {
                                            m_is_live);
 
     m_audio_cached_que->set_clear_callback(audio_cached_que_clear_callback, this);
+    m_audio_cached_que->set_buffering_callback(audio_cached_que_buffering_callback, this);
 
 
     m_audio_decoded_que = new JSFrameQueue(QUEUE_TYPE_AUDIO,
@@ -295,6 +294,7 @@ JS_RET JSPlayer::prepare_audio() {
                                            m_is_live);
 
     m_audio_decoded_que->set_clear_callback(audio_decoded_que_clear_callback, this);
+    m_audio_cached_que->set_buffering_callback(audio_decoded_que_buffering_callback, this);
 
     if (m_is_live) {
 
@@ -326,6 +326,7 @@ JS_RET JSPlayer::prepare_video() {
                                            m_is_live);
 
     m_video_cached_que->set_clear_callback(video_cached_que_clear_callback, this);
+    m_video_cached_que->set_buffering_callback(video_cached_que_buffering_callback, this);
 
     m_video_decoded_que = new JSFrameQueue(QUEUE_TYPE_VIDEO,
                                            m_video_stream->time_base,
@@ -334,6 +335,7 @@ JS_RET JSPlayer::prepare_video() {
                                            m_is_live);
 
     m_video_decoded_que->set_clear_callback(video_decoded_que_clear_callback, this);
+    m_video_decoded_que->set_buffering_callback(video_decoded_que_buffering_callback, this);
 
     if (m_is_live) {
         if (m_egl_renderer->m_is_hold_surface) {
@@ -401,6 +403,10 @@ void JSPlayer::stop_play(bool is_to_pause) {
         m_video_cached_que->abort_get();
         m_video_decoded_que->abort_get();
 
+        if (!m_is_live) {
+            m_video_decoded_que->abort_put();
+        }
+
         LOGD("stop_play stop decode video step1.");
         pthread_join(m_decode_video_tid, NULL);
         LOGD("stop_play stop decode video step2.");
@@ -416,13 +422,17 @@ void JSPlayer::stop_play(bool is_to_pause) {
         m_audio_cached_que->abort_get();
         m_audio_decoded_que->abort_get();
 
+        if (!m_is_live) {
+            m_audio_decoded_que->abort_put();
+        }
+
         LOGD("stop_play stop decode audio step1.");
         pthread_join(m_decode_audio_tid, NULL);
         LOGD("stop_play stop decode audio step2.");
 
         LOGD("stop_play stop play audio step1.");
         while (m_is_audio_data_consuming);
-        LOGD("stop_play stop play audio step2");
+        LOGD("stop_play stop play audio step2.");
     }
 
     if (!is_to_pause || m_is_live) {
@@ -509,7 +519,7 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
         return;
     }
 
-    //replay audio.
+    //replay audio use new engine.
     LOGD("%s stop play audio step1.", __func__);
     m_audio_decoded_que->abort_get();
     LOGD("%s stop play audio step2.", __func__);
@@ -518,7 +528,6 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
     m_audio_decoded_que->clear_abort_get();
     pthread_create(&m_play_audio_tid, NULL, play_audio_thread,
                    this);
-
     if (m_is_intercept_audio) {
         //todo audiotrack.clear.
         m_audio_player->clear();
@@ -801,6 +810,14 @@ void *decode_video_thread(void *data) {
         }
     }
 
+
+    if (avpkt) {
+        av_packet_free(&avpkt);
+    }
+    if (frame) {
+        av_frame_free(&frame);
+    }
+
     pthread_exit(0);
 
     err:
@@ -892,6 +909,13 @@ void *decode_audio_thread(void *data) {
         }
     }
 
+    if (avpkt) {
+        av_packet_free(&avpkt);
+    }
+    if (frame) {
+        av_frame_free(&frame);
+    }
+
     pthread_exit(0);
 
     err:
@@ -945,7 +969,6 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
         av_frame_free(&frame);
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_PLAY_AUDIO_FAILED, 0, 0);
-            LOGD("audio_size=0");
             goto end;
         } else {
             audio_player->enqueue(audio_player->m_buffer, audio_size);
@@ -970,7 +993,7 @@ void egl_buffer_queue_cb(void *data) {
         return;
     }
 
-//    usleep(32000);//todo sync video audio.
+    usleep(71430);//todo sync video audio.
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
 }
@@ -995,6 +1018,48 @@ void audio_decoded_que_clear_callback(void *data) {
 void video_decoded_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
     LOGD("*drop* drop video packet (clear all)");
+}
+
+void audio_cached_que_buffering_callback(void *data, bool is_buffering) {
+    JSPlayer *player = (JSPlayer *) data;
+    if (is_buffering) {
+        LOGD("start buffering audio packet.");
+    } else {
+        LOGD("stop buffering audio packet.");
+    }
+
+    player->m_js_event_handler->call_on_buffering(is_buffering);
+}
+
+void video_cached_que_buffering_callback(void *data, bool is_buffering) {
+    JSPlayer *player = (JSPlayer *) data;
+    if (is_buffering) {
+        LOGD("start buffering video packet.");
+    } else {
+        LOGD("stop buffering video packet.");
+    }
+    player->m_js_event_handler->call_on_buffering(is_buffering);
+}
+
+
+void audio_decoded_que_buffering_callback(void *data, bool is_buffering) {
+    JSPlayer *player = (JSPlayer *) data;
+    if (is_buffering) {
+        LOGD("start buffering audio frame.");
+    } else {
+        LOGD("stop buffering audio frame.");
+    }
+    player->m_js_event_handler->call_on_buffering(is_buffering);
+}
+
+void video_decoded_que_buffering_callback(void *data, bool is_buffering) {
+    JSPlayer *player = (JSPlayer *) data;
+    if (is_buffering) {
+        LOGD("start buffering video frame.");
+    } else {
+        LOGD("stop buffering video frame.");
+    }
+    player->m_js_event_handler->call_on_buffering(is_buffering);
 }
 
 void consume_audio_data_by_interceptor(JSPlayer *player) {
@@ -1025,7 +1090,6 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
 
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_INTERCEPT_AUDIO_FAILED, 0, 0);
-            LOGE("audio_size=0");
             av_frame_free(&frame);
             goto end;
         } else {
@@ -1069,4 +1133,3 @@ bool is_live(AVFormatContext *s) {
     }
     return false;
 }
-

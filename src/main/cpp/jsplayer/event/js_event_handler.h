@@ -27,6 +27,8 @@ public:
 
     void call_on_completed();
 
+    void call_on_buffering(bool is_buffering);
+
 private:
 
     jobject m_java_js_player;
