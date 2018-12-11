@@ -44,7 +44,8 @@ void JSEventHandler::call_on_intercepted_pcm_data(uint8_t *pcm_data, int len,
 
 void JSEventHandler::call_on_parse_data_from_video_packet(uint8_t *data, int size) {
     if (m_native_js_player->native_parse_data_from_video_packet_callback) {
-        m_native_js_player->native_parse_data_from_video_packet_callback(data, size);
+        m_native_js_player->native_parse_data_from_video_packet_callback((jlong) m_native_js_player,
+                                                                         data, size);
     }
 }
 

@@ -592,9 +592,9 @@ public:
              it != m_dequeue->end();) {
 
             av_frame_free(&*it);
-            it = m_dequeue->erase(it);
+            it++;
         }
-
+        m_dequeue->clear();
 
         if (m_is_waiting_for_insufficient_max_duration) {
             pthread_cond_signal(m_cond);

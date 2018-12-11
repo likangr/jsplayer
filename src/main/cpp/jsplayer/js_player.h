@@ -97,6 +97,12 @@ public:
 
     JS_RET cache_live_audio_packet(AVPacket *src);
 
+
+    /*audio control*/
+    void set_mute(bool mute);
+
+    void set_channel_mute(int channel, bool mute);
+
 /***
  * ********************************
  * fields
@@ -154,6 +160,10 @@ public:
     volatile bool m_is_reading_frame = false;
     volatile bool m_is_audio_data_consuming = false;
 
+    bool m_mute = false;
+    bool m_left_channel_mute = false;
+    bool m_right_channel_mute = false;
+    uint8_t m_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
 
     /*func pointers*/
 
@@ -162,7 +172,7 @@ public:
                                                  int sample_num,
                                                  int channel_num);
 
-    void (*native_parse_data_from_video_packet_callback)(uint8_t *data,
+    void (*native_parse_data_from_video_packet_callback)(jlong native_js_player, uint8_t *data,
                                                          int size);
 
     /*sync audio and video control field*/

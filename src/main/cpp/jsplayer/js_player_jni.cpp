@@ -260,7 +260,7 @@ void JS_JNI_CALL set_url(JNIEnv *env, jobject obj, jlong handle, jstring url) {
 void JS_JNI_CALL set_mute(JNIEnv *env, jobject obj, jlong handle, jboolean mute) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    player->m_audio_player->set_mute(mute);
+    player->set_mute(mute);
 
 }
 
@@ -269,7 +269,7 @@ void JS_JNI_CALL
 set_channel_mute(JNIEnv *env, jobject obj, jlong handle, jint channel, jboolean mute) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    player->m_audio_player->set_channel_mute(channel, mute);
+    player->set_channel_mute(channel, mute);
 }
 
 
@@ -307,16 +307,15 @@ void JS_JNI_CALL
 set_native_parse_data_from_video_packet_callback_handle(JNIEnv *env, jobject obj, jlong handle,
                                                         jlong callback_handle) {
     JSPlayer *player = (JSPlayer *) handle;
-    player->native_parse_data_from_video_packet_callback = (void (*)(uint8_t *,
+    player->native_parse_data_from_video_packet_callback = (void (*)(jlong, uint8_t *,
                                                                      int)) (callback_handle);
-
 }
 
 
 jboolean JS_JNI_CALL get_mute(JNIEnv *env, jobject obj, jlong handle) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    return (jboolean) (player->m_audio_player->m_mute ? JNI_TRUE : JNI_FALSE);
+    return (jboolean) (player->m_mute ? JNI_TRUE : JNI_FALSE);
 }
 
 

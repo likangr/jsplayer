@@ -21,7 +21,7 @@ public :
     JS_RET enqueue(const void *buffer, unsigned int size);
 
     JS_RET clear();
-    
+
     void set_mute(bool mute);
 
     void set_volume(int volume);
@@ -66,7 +66,6 @@ public :
 
     bool m_is_created_audio_player = false;
 
-    uint8_t m_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
 
 };
 

@@ -265,17 +265,15 @@ JS_RET JSPlayer::prepare_audio() {
         return JS_ERR;
     }
 
-    AVCodecParameters *codecpar = m_audio_stream->codecpar;
     ret = m_audio_player->create_AudioPlayer(
-            codecpar->sample_rate,
-            codecpar->channels,
+            m_audio_stream->codecpar->sample_rate,
+            m_audio_stream->codecpar->channels,
             DST_BITS_PER_SAMPLE,
             this);
     if (ret != JS_OK) {
         LOGE("unable to create_AudioPlayer!");
         return JS_ERR;
     }
-
 
     m_audio_cached_que = new JSPacketQueue(QUEUE_TYPE_AUDIO,
                                            m_audio_stream->time_base,
@@ -590,6 +588,24 @@ JS_RET JSPlayer::cache_record_audio_packet(AVPacket *src) {
 
 JS_RET JSPlayer::cache_live_audio_packet(AVPacket *src) {
     return (m_audio_cached_que->*m_audio_cached_que->put)(src);
+}
+
+void JSPlayer::set_mute(bool mute) {
+    m_mute = mute;
+    m_audio_player->set_mute(m_mute);
+}
+
+void JSPlayer::set_channel_mute(int channel, bool mute) {
+    if (m_audio_stream->codecpar->channels != 2) {
+        LOGW("unsupport operation: set_channel_mute when channel count != 2");
+        return;
+    }
+    if (channel == 0) {
+        m_left_channel_mute = mute;
+    } else if (channel == 1) {
+        m_right_channel_mute = mute;
+    }
+    m_audio_player->set_channel_mute(channel, mute);
 }
 
 
@@ -965,13 +981,13 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
         audio_player->enqueue(frame->data[0], (unsigned int) frame->linesize[0]);
         av_frame_free(&frame);
     } else {
-        audio_size = convert_simple_format_to_S16(audio_player->m_buffer, frame);
+        audio_size = convert_simple_format_to_S16(player->m_buffer, frame);
         av_frame_free(&frame);
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_PLAY_AUDIO_FAILED, 0, 0);
             goto end;
         } else {
-            audio_player->enqueue(audio_player->m_buffer, audio_size);
+            audio_player->enqueue(player->m_buffer, audio_size);
         }
     }
 
@@ -1067,7 +1083,6 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
     unsigned int audio_size;
     AVFrame *frame;
     JSEventHandler *js_event_handler = player->m_js_event_handler;
-    JSAudioPlayer *audio_player = player->m_audio_player;
 
     if (!player->m_is_playing) {
         goto end;
@@ -1083,18 +1098,59 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
         js_event_handler->call_on_intercepted_pcm_data(frame->data[0],
                                                        frame->linesize[0],
                                                        frame->channels);
+
+        if (player->m_mute) {
+
+            for (int i = 0; i < frame->linesize[0]; i++) {
+                frame->data[0][i] = 0;
+            }
+
+        } else {
+            if (player->m_left_channel_mute) {
+                for (int i = 0; i < frame->linesize[0] / 2; i += 2) {
+                    ((short *) frame->data[0])[i] = 0;
+                }
+            }
+            if (player->m_right_channel_mute) {
+                for (int i = 1; i < frame->linesize[0] / 2; i += 2) {
+                    ((short *) frame->data[0])[i] = 0;
+                }
+            }
+        }
+
         av_frame_free(&frame);
         consume_audio_data_by_interceptor(player);
     } else {
-        audio_size = convert_simple_format_to_S16(audio_player->m_buffer, frame);
+        audio_size = convert_simple_format_to_S16(player->m_buffer, frame);
 
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_INTERCEPT_AUDIO_FAILED, 0, 0);
             av_frame_free(&frame);
             goto end;
         } else {
+
+            if (player->m_mute) {
+
+                for (int i = 0; i < audio_size; i++) {
+                    player->m_buffer[i] = 0;
+                }
+
+            } else {
+                if (player->m_left_channel_mute) {
+                    for (int i = 0; i < audio_size / 2; i += 2) {
+                        ((short *) player->m_buffer)[i] = 0;
+
+                    }
+                }
+                if (player->m_right_channel_mute) {
+                    for (int i = 1; i < audio_size / 2; i += 2) {
+                        ((short *) player->m_buffer)[i] = 0;
+                    }
+                }
+            }
+
             js_event_handler->call_on_intercepted_pcm_data(
-                    audio_player->m_buffer, audio_size,
+                    player->m_buffer, audio_size,
                     frame->channels);
             av_frame_free(&frame);
             consume_audio_data_by_interceptor(player);

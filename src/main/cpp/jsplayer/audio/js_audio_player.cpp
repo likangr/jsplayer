@@ -215,8 +215,6 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
 
     m_is_created_audio_player = true;
 
-
-    //设置之前的参数。
     set_volume(m_volume);
     set_mute(m_mute);
 
