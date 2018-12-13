@@ -315,7 +315,7 @@ set_native_parse_data_from_video_packet_callback_handle(JNIEnv *env, jobject obj
 jboolean JS_JNI_CALL get_mute(JNIEnv *env, jobject obj, jlong handle) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    return (jboolean) (player->m_mute ? JNI_TRUE : JNI_FALSE);
+    return player->get_mute();
 }
 
 

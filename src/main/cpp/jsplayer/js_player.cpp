@@ -265,6 +265,24 @@ JS_RET JSPlayer::prepare_audio() {
         return JS_ERR;
     }
 
+    if (m_audio_stream->codecpar->format != DEFAULT_AV_SAMPLE_FMT) {
+        m_js_media_converter = new JSMediaCoverter();
+        ret = m_js_media_converter->init_audio_converter(NULL,
+                                                         m_audio_stream->codecpar->channel_layout,
+                                                         m_audio_stream->codecpar->channels,
+                                                         DEFAULT_AV_SAMPLE_FMT,
+                                                         m_audio_stream->codecpar->sample_rate,
+                                                         DST_BYTES_PER_SAMPLE,
+                                                         m_audio_stream->codecpar->channel_layout,
+                                                         m_audio_stream->codecpar->channels,
+                                                         (AVSampleFormat) m_audio_stream->codecpar->format,
+                                                         m_audio_stream->codecpar->sample_rate);
+        if (ret != JS_OK) {
+            LOGE("unable to init audio converter !");
+            return JS_ERR;
+        }
+    }
+
     ret = m_audio_player->create_AudioPlayer(
             m_audio_stream->codecpar->sample_rate,
             m_audio_stream->codecpar->channels,
@@ -498,6 +516,12 @@ void JSPlayer::free_res() {
         avformat_free_context(m_format_ctx);
         m_format_ctx = NULL;
     }
+    if (m_js_media_converter != NULL) {
+        m_js_media_converter->release_audio_converter();
+        delete m_js_media_converter;
+        m_js_media_converter = NULL;
+    }
+
 
     m_audio_player->reset();
     m_js_media_decoder->reset();
@@ -511,6 +535,11 @@ void JSPlayer::set_cur_timing() {
 
 void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
 
+    if (m_is_intercept_audio == is_intercept_audio) {
+        LOGD("%s has already in this status.m_is_intercept_audio=%d", __func__,
+             m_is_intercept_audio);
+        return;
+    }
     m_is_intercept_audio = is_intercept_audio;
     LOGD("%s stop play audio step0. m_is_intercept_audio=%d", __func__, m_is_intercept_audio);
     if (!m_has_audio_stream || !m_is_audio_data_consuming) {
@@ -593,6 +622,10 @@ JS_RET JSPlayer::cache_live_audio_packet(AVPacket *src) {
 void JSPlayer::set_mute(bool mute) {
     m_mute = mute;
     m_audio_player->set_mute(m_mute);
+}
+
+bool JSPlayer::get_mute() {
+    return m_mute;
 }
 
 void JSPlayer::set_channel_mute(int channel, bool mute) {
@@ -981,13 +1014,15 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
         audio_player->enqueue(frame->data[0], (unsigned int) frame->linesize[0]);
         av_frame_free(&frame);
     } else {
-        audio_size = convert_simple_format_to_S16(player->m_buffer, frame);
+        audio_size = player->m_js_media_converter->convert_simple_format_to_S16(
+                player->m_convert_audio_buffer,
+                frame);
         av_frame_free(&frame);
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_PLAY_AUDIO_FAILED, 0, 0);
             goto end;
         } else {
-            audio_player->enqueue(player->m_buffer, audio_size);
+            audio_player->enqueue(player->m_convert_audio_buffer, audio_size);
         }
     }
 
@@ -1009,7 +1044,7 @@ void egl_buffer_queue_cb(void *data) {
         return;
     }
 
-    usleep(71430);//todo sync video audio.
+//    usleep(71430);//todo sync video audio.
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
 }
@@ -1121,7 +1156,9 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
         av_frame_free(&frame);
         consume_audio_data_by_interceptor(player);
     } else {
-        audio_size = convert_simple_format_to_S16(player->m_buffer, frame);
+        audio_size = player->m_js_media_converter->convert_simple_format_to_S16(
+                player->m_convert_audio_buffer,
+                frame);
 
         if (audio_size == 0) {
             js_event_handler->call_on_error(JS_ERR_INTERCEPT_AUDIO_FAILED, 0, 0);
@@ -1132,25 +1169,25 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
             if (player->m_mute) {
 
                 for (int i = 0; i < audio_size; i++) {
-                    player->m_buffer[i] = 0;
+                    player->m_convert_audio_buffer[i] = 0;
                 }
 
             } else {
                 if (player->m_left_channel_mute) {
                     for (int i = 0; i < audio_size / 2; i += 2) {
-                        ((short *) player->m_buffer)[i] = 0;
+                        ((short *) player->m_convert_audio_buffer)[i] = 0;
 
                     }
                 }
                 if (player->m_right_channel_mute) {
                     for (int i = 1; i < audio_size / 2; i += 2) {
-                        ((short *) player->m_buffer)[i] = 0;
+                        ((short *) player->m_convert_audio_buffer)[i] = 0;
                     }
                 }
             }
 
             js_event_handler->call_on_intercepted_pcm_data(
-                    player->m_buffer, audio_size,
+                    player->m_convert_audio_buffer, audio_size,
                     frame->channels);
             av_frame_free(&frame);
             consume_audio_data_by_interceptor(player);

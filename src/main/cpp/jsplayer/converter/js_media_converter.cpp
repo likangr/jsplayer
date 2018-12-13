@@ -2,44 +2,107 @@
 #include "libyuv/convert.h"
 #include "libyuv.h"
 
-extern "C" {
-#include "util/js_log.h"
-#include "libavutil/imgutils.h"
-#include "libswresample/swresample.h"
+
+JS_RET JSMediaCoverter::init_audio_converter(struct SwrContext *s,
+                                             int64_t out_ch_layout,
+                                             int out_channel,
+                                             enum AVSampleFormat out_sample_fmt,
+                                             int out_sample_rate,
+                                             int bytes_per_sample,
+                                             int64_t in_ch_layout,
+                                             int in_channel,
+                                             enum AVSampleFormat in_sample_fmt,
+                                             int in_sample_rate) {
+    m_out_ch_layout = out_ch_layout;
+    m_out_channel = out_channel;
+    m_out_sample_fmt = out_sample_fmt;
+    m_out_sample_rate = out_sample_rate;
+    m_bytes_per_sample = bytes_per_sample;
+    m_in_ch_layout = in_ch_layout;
+    m_in_channel = in_channel;
+    m_in_sample_fmt = in_sample_fmt;
+    m_in_sample_rate = in_sample_rate;
+
+    LOGD("%s m_out_ch_layout=%lld,"
+         "m_out_channel=%d,"
+         "m_out_sample_fmt=%d,"
+         "m_out_sample_rate=%d,"
+         "m_bytes_per_sample=%d,"
+         "m_in_ch_layout=%lld,"
+         "m_in_channel=%d,"
+         "m_in_sample_fmt=%d,"
+         "m_in_sample_rate=%d",
+         __func__,
+         m_out_ch_layout,
+         m_out_channel,
+         m_out_sample_fmt,
+         m_out_sample_rate,
+         m_bytes_per_sample,
+         m_in_ch_layout,
+         m_in_channel,
+         m_in_sample_fmt,
+         m_in_sample_rate);
+
+    m_audio_swr_ctx = swr_alloc_set_opts(s, m_out_ch_layout,
+                                         m_out_sample_fmt,
+                                         m_out_sample_rate,
+                                         m_in_ch_layout,
+                                         m_in_sample_fmt,
+                                         m_in_sample_rate, 0, NULL);
+    if (!m_audio_swr_ctx || swr_init(m_audio_swr_ctx) < 0) {
+        return JS_ERR_EXTERNAL;
+    }
+
+    return JS_OK;
+}
+
+void JSMediaCoverter::release_audio_converter() {
+    if (m_audio_swr_ctx != NULL) {
+        swr_free(&m_audio_swr_ctx);
+        m_audio_swr_ctx = NULL;
+    }
+
+    m_out_ch_layout = 0;
+    m_in_channel = 0;
+    m_out_sample_fmt = AV_SAMPLE_FMT_NONE;
+    m_out_sample_rate = 0;
+    m_bytes_per_sample = 0;
+    m_in_ch_layout = 0;
+    m_out_channel = 0;
+    m_in_sample_fmt = AV_SAMPLE_FMT_NONE;
+    m_in_sample_rate = 0;
 }
 
 
-unsigned int convert_simple_format_to_S16(uint8_t *audio_buf, AVFrame *frame) {
+unsigned int
+JSMediaCoverter::convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFrame *frame) {
+    //计算目标样本数  转换前后的样本数不一样  抓住一点 采样时间相等
+    //src_nb_samples/src_rate=dst_nb_samples/dst_rate
 
-    SwrContext *swr_ctx;
+    /**
+     * swr_get_delay==》返回之前没有处理的输入采样个数。
+     * 如果提供的输入大于可用的输出空间，Swresample可以缓冲数据，《而且在采样率之间的转换需要延迟。不理解这句话？》
+     * 这个函数返回所有这些延迟的总和。
+     * 准确的延迟不一定是输入或输出采样率的整数值。特别是当下采样值很大时，输出采样率可能不是表示延迟的好选择，就像上采样率和输入采样率一样。
+     */
+    int out_nb_samples = (int) av_rescale_rnd(
+            swr_get_delay(m_audio_swr_ctx, m_in_sample_rate) + frame->nb_samples,
+            m_out_sample_rate,
+            m_in_sample_rate, AV_ROUND_INF);
 
-    swr_ctx = swr_alloc_set_opts(NULL, frame->channel_layout, DEFAULT_AV_SAMPLE_FMT,
-                                 frame->sample_rate,
-                                 frame->channel_layout,
-                                 (enum AVSampleFormat) frame->format,
-                                 frame->sample_rate, 0, NULL);
-    if (!swr_ctx || swr_init(swr_ctx) < 0) {
+    int ret = swr_convert(m_audio_swr_ctx, &convert_audio_buf, out_nb_samples,
+                          (const uint8_t **) frame->data,
+                          frame->nb_samples);
+
+    if (ret < 0) {
         return 0;
     }
 
-    // 计算转换后的sample个数 a * b / c
-    int dst_nb_samples = (int) av_rescale_rnd(
-            swr_get_delay(swr_ctx, frame->sample_rate) + frame->sample_rate, frame->sample_rate,
-            frame->sample_rate, AV_ROUND_INF);
+    int data_size = m_out_channel * out_nb_samples * m_bytes_per_sample;
 
+//    LOGD("%s out_nb_samples=%d,data_size=%d", __func__,
+//         out_nb_samples, data_size);
 
-    int nb = swr_convert(swr_ctx, &audio_buf, dst_nb_samples, (const uint8_t **) frame->data,
-                         frame->nb_samples);
-
-    if (nb < 0) {
-        swr_free(&swr_ctx);
-        return 0;
-    }
-
-    int out_channels = av_get_channel_layout_nb_channels(frame->channel_layout);
-    int data_size = out_channels * nb * av_get_bytes_per_sample(DEFAULT_AV_SAMPLE_FMT);
-
-    swr_free(&swr_ctx);
     return (unsigned int) data_size;
 }
 

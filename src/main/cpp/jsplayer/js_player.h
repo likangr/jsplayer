@@ -4,6 +4,7 @@
 #include "decoder/js_media_decoder.h"
 #include "audio/js_audio_player.h"
 #include "render/js_egl_renderer.h"
+#include "converter/js_media_converter.h"
 #include "util/js_queue.h"
 #include "js_constant.h"
 
@@ -101,6 +102,8 @@ public:
     /*audio control*/
     void set_mute(bool mute);
 
+    bool get_mute();
+
     void set_channel_mute(int channel, bool mute);
 
 /***
@@ -122,6 +125,7 @@ public:
     JSEglRenderer *m_egl_renderer = NULL;
     JSMediaDecoder *m_js_media_decoder = NULL;
     JSEventHandler *m_js_event_handler = NULL;
+    JSMediaCoverter *m_js_media_converter = NULL;
 
 
     pthread_t m_prepare_tid,
@@ -163,7 +167,7 @@ public:
     bool m_mute = false;
     bool m_left_channel_mute = false;
     bool m_right_channel_mute = false;
-    uint8_t m_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
+    uint8_t m_convert_audio_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
 
     /*func pointers*/
 

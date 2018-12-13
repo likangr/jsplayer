@@ -8,17 +8,48 @@
 extern "C" {
 #include "libavutil/frame.h"
 #include "decoder/js_java_mediacodec_wrapper.h"
+#include "util/js_log.h"
+#include "libavutil/imgutils.h"
+#include "libswresample/swresample.h"
 }
+
 
 #define   DEFAULT_AV_PIX_FMT                            AV_PIX_FMT_YUV420P
 #define   DEFAULT_AV_SAMPLE_FMT                         AV_SAMPLE_FMT_S16
 #define   DST_BITS_PER_SAMPLE                           16
-//#define   DST_LAYOUT                         AV_CH_LAYOUT_STEREO
-//#define   DST_CHANNEL                        2
-//#define   DST_SAMPLE_RATE                    44100
+#define   DST_BYTES_PER_SAMPLE                          2
 
 
-unsigned int convert_simple_format_to_S16(uint8_t *audio_buf, AVFrame *frame);
+class JSMediaCoverter {
+public:
+    SwrContext *m_audio_swr_ctx = NULL;
+
+    int64_t m_out_ch_layout = 0;
+    int m_out_channel = 0;
+    enum AVSampleFormat m_out_sample_fmt = AV_SAMPLE_FMT_NONE;
+    int m_out_sample_rate = 0;
+    int m_bytes_per_sample = 0;
+    int64_t m_in_ch_layout = 0;
+    int m_in_channel = 0;
+    enum AVSampleFormat m_in_sample_fmt = AV_SAMPLE_FMT_NONE;
+    int m_in_sample_rate = 0;
+
+    JS_RET init_audio_converter(struct SwrContext *s,
+                                int64_t out_ch_layout,
+                                int out_channel,
+                                enum AVSampleFormat out_sample_fmt,
+                                int out_sample_rate,
+                                int bytes_per_sample,
+                                int64_t in_ch_layout,
+                                int in_channel,
+                                enum AVSampleFormat in_sample_fmt,
+                                int in_sample_rate);
+
+    void release_audio_converter();
+
+    unsigned int convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFrame *frame);
+};
+
 
 JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
                         JSMediaCodec *video_hw_dec,
