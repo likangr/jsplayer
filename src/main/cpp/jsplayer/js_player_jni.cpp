@@ -56,7 +56,6 @@ JNIEXPORT jint JS_JNI_CALL JNI_OnLoad(
 //            __JS_NDK_MEDIACODEC_LINKED__ = 1;
 //        }
 //    }
-    init_signal_avpkt();
 
     js_jni_set_java_vm(vm, NULL);
     JNIEnv *env = js_jni_get_env(NULL);

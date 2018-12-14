@@ -15,7 +15,7 @@ import java.io.File;
  * @author likangren
  * simple video.
  */
-public class SimpleVideoActivity extends Activity implements View.OnClickListener, JSPlayer.OnErrorListener, JSPlayer.OnPreparedListener, JSPlayer.OnInfoListener, JSPlayer.OnCompletedListener {
+public class SimpleVideoActivity extends Activity implements View.OnClickListener, JSPlayer.OnErrorListener, JSPlayer.OnPreparedListener, JSPlayer.OnInfoListener, JSPlayer.OnCompletedListener, JSPlayer.OnBufferingListener {
     private String TAG = "SimpleVideoActivity";
 
     private static String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
@@ -58,18 +58,18 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl("http://221.228.226.23/11/t/j/v/b/tjvbwspwhqdmgouolposcsfafpedmb/sh.yinyuetai.com/691201536EE4912BF7E4F1E2C67B8119.mp4");
 //        mPlayer.setUrl("http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4");
 //        mPlayer.setUrl("http://v.ysbang.cn//data/video/2015/rkb/2015rkb01.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "diezhongdie.mp4");
-        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
+        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
 
 
-        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_HW);
+        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
         mPlayer.prepare();
 
         mPlayer.setOnPreparedListener(this);
         mPlayer.setOnErrorListener(this);
         mPlayer.setOnInfoListener(this);
         mPlayer.setOnCompletedListener(this);
+        mPlayer.setOnBufferingListener(this);
 
         mBtnMute = (Button) findViewById(R.id.btn_mute);
         mBtnPause = (Button) findViewById(R.id.btn_pause);
@@ -147,5 +147,11 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     @Override
     public void onCompleted(JSPlayer player) {
         Logger.d(TAG, "onCompleted");
+    }
+
+    @Override
+    public void onBuffering(JSPlayer player, boolean isBuffering) {
+        Logger.d(TAG, "onBuffering isBuffering="+isBuffering);
+
     }
 }

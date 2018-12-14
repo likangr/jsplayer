@@ -114,6 +114,7 @@ public:
 
     /*basic*/
     bool m_is_eof = false;
+    bool m_is_cleared_video_frame = false;
 
     const char *m_url = NULL;
     bool m_is_live = false;

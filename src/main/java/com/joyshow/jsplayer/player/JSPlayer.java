@@ -413,6 +413,7 @@ public class JSPlayer extends FrameLayout {
 //        url="rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov";
 //        url="http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4";
 //        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "sintel.mp4";
+//        url = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "寻梦环游记.mp4";
 //        url = "http://jdvideo.51joyshow.com/live/1126058980742028_20181207/index.m3u8?starttime=1544112000&endtime=1544198399";
 //        url = "http://182.106.233.3/9223372036854775807/1391046160500/video/上江6.1大联欢.mp4";
         setUrl(mNativePlayer, url);

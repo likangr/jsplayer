@@ -22,11 +22,6 @@ typedef void (*CLEAR_CALLBACK)(void *data);
 
 typedef void (*BUFFERING_CALLBACK)(void *data, bool is_buffering);
 
-static AVPacket flush_pkt0, *flush_pkt = &flush_pkt0;
-static AVPacket eof_pkt0, *eof_pkt = &eof_pkt0;
-
-static void init_signal_avpkt();
-
 
 template<class T>
 class JSQueue {
@@ -69,7 +64,6 @@ public:
     volatile bool m_is_waiting_for_reach_min_duration = true;
     volatile bool m_is_waiting_for_insufficient_max_duration = false;
     volatile bool m_is_need_to_drop_until_i_frame = true;
-    volatile bool m_is_reached_the_min_duration = false;
 
     volatile bool m_is_aborted_get = false;
     volatile bool m_is_aborted_put = false;
@@ -173,19 +167,11 @@ void JSQueue<T>::clear_abort_put() {
 }
 
 
-static void init_signal_avpkt() {
-    av_init_packet(flush_pkt);
-    flush_pkt->size = 0;
-    flush_pkt->data = (uint8_t *) flush_pkt;
-
-    av_init_packet(eof_pkt);
-    eof_pkt->size = 0;
-    eof_pkt->data = (uint8_t *) eof_pkt;
-}
-
-
 class JSPacketQueue : public JSQueue<AVPacket *> {
 public:
+
+    AVPacket m_flush_pkt0, *m_flush_pkt = &m_flush_pkt0;
+    AVPacket m_eof_pkt0, *m_eof_pkt = &m_eof_pkt0;
 
     JSPacketQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration,
                   int64_t max_duration, bool is_live) : JSQueue<AVPacket *>(queue_type,
@@ -193,6 +179,7 @@ public:
                                                                             min_duration,
                                                                             max_duration,
                                                                             is_live) {
+
 
         if (m_queue_type == QUEUE_TYPE_VIDEO) {
 
@@ -214,6 +201,14 @@ public:
             }
         }
 
+        av_init_packet(m_flush_pkt);
+        m_flush_pkt->size = 0;
+        m_flush_pkt->data = (uint8_t *) m_flush_pkt;
+
+        av_init_packet(m_eof_pkt);
+        m_eof_pkt->size = 0;
+        m_eof_pkt->data = (uint8_t *) m_eof_pkt;
+
     }
 
     ~JSPacketQueue() {
@@ -228,7 +223,7 @@ public:
             if (m_is_aborted_get) {
                 goto aborted;
             }
-            if (m_is_reached_the_min_duration) {
+            if (!m_is_waiting_for_reach_min_duration) {
 
                 AVPacket *element = m_dequeue->front();
                 m_dequeue->pop_front();
@@ -236,7 +231,7 @@ public:
                 m_num--;
 
                 if (m_num == 0) {
-                    m_is_reached_the_min_duration = false;
+                    m_is_waiting_for_reach_min_duration = true;
                 }
 
                 if (m_is_waiting_for_insufficient_max_duration) {
@@ -249,7 +244,6 @@ public:
                 return element;
             } else {
 
-                m_is_waiting_for_reach_min_duration = true;
                 if (buffering_callback) {
                     buffering_callback(m_buffering_callback_data, true);
                 }
@@ -279,7 +273,17 @@ public:
         }
 
         last = m_dequeue->back();
+        if (last->size == 0) {
+            deque<AVPacket *>::iterator it = m_dequeue->end();
+            it--;
+            last = *it--;
+        }
+
         first = m_dequeue->front();
+        if (first->size == 0) {
+            deque<AVPacket *>::iterator it = m_dequeue->begin();
+            first = *it++;
+        }
 
         duration = (int64_t) ((last->dts - first->dts) * av_q2d(m_time_base) * 1000000);
         pthread_mutex_unlock(m_mutex);
@@ -320,20 +324,19 @@ public:
             m_is_need_to_drop_until_i_frame = true;
         }
 
+        if (m_num == 0) {
+            m_is_waiting_for_reach_min_duration = true;
+        }
+
         if (m_is_waiting_for_insufficient_max_duration) {
             pthread_cond_signal(m_cond);
             m_is_waiting_for_insufficient_max_duration = false;
         }
 
-        if (m_num == 0) {
-            m_is_reached_the_min_duration = false;
-        }
-
-        pthread_mutex_unlock(m_mutex);
-
         if (clear_callback) {
             clear_callback(m_clear_callback_data);
         }
+        pthread_mutex_unlock(m_mutex);
     }
 
 
@@ -350,45 +353,46 @@ public:
 
         *src = *avpkt;
 
-        bool is_drop = false;
-        bool is_signal_avpkt = false;
-        if (m_is_need_to_drop_until_i_frame) {
+        bool is_signal_avpkt = src->size == 0;
 
+        if (m_is_need_to_drop_until_i_frame && !is_signal_avpkt) {
             if (src->flags & AV_PKT_FLAG_KEY) {
                 m_is_need_to_drop_until_i_frame = false;
-            } else if (src->size == 0) {
-                is_signal_avpkt = true;
             } else {
                 av_packet_free(&src);
                 LOGD("*drop* drop a non-key frame until key video packet.");
-                is_drop = true;
+                pthread_mutex_unlock(m_mutex);
+                return JS_OK;
             }
         }
-        if (!is_drop) {
-            m_dequeue->push_back(src);
-            m_num++;
+
+        bool is_eof_avpkt = src->data == m_eof_pkt->data;
+        if (is_eof_avpkt) {
+            src->data = NULL;
         }
 
-        if (m_num != 0) {
-            int64_t duration = get_duration();
-            bool is_reached_the_min_duration = false;
+        m_dequeue->push_back(src);
+        m_num++;
 
-            if (duration >= m_max_duration) {
+        int64_t duration = get_duration();
+
+        if (duration >= m_max_duration) {
+
+            if (is_eof_avpkt) {
                 clear(true);
-
-                if (m_is_waiting_for_reach_min_duration && m_num != 0) {
-                    is_reached_the_min_duration = true;
-                }
-            } else if (m_is_waiting_for_reach_min_duration && (
-                    duration >= m_min_duration || is_signal_avpkt)) {
-                is_reached_the_min_duration = true;
+            } else {
+                clear(false);
+                put_flush_avpkt();
             }
-
-            if (is_reached_the_min_duration) {
+            if (m_is_waiting_for_reach_min_duration) {
                 pthread_cond_signal(m_cond);
-                m_is_reached_the_min_duration = true;
                 m_is_waiting_for_reach_min_duration = false;
             }
+
+        } else if (m_is_waiting_for_reach_min_duration && (
+                duration >= m_min_duration || is_signal_avpkt)) {
+            pthread_cond_signal(m_cond);
+            m_is_waiting_for_reach_min_duration = false;
         }
         pthread_mutex_unlock(m_mutex);
         return JS_OK;
@@ -412,22 +416,27 @@ public:
         m_num++;
 
         int64_t duration = get_duration();
+
         bool is_signal_avpkt = src->size == 0;
-        bool is_reached_the_min_duration = false;
+        bool is_eof_avpkt = src->data == m_eof_pkt->data;
+        if (is_eof_avpkt) {
+            src->data = NULL;
+        }
 
         if (duration >= m_max_duration) {
-            clear(true);
-            if (m_is_waiting_for_reach_min_duration && m_num != 0) {
-                is_reached_the_min_duration = true;
+            if (is_eof_avpkt) {
+                clear(true);
+            } else {
+                clear(false);
+                put_flush_avpkt();
+            }
+            if (m_is_waiting_for_reach_min_duration) {
+                pthread_cond_signal(m_cond);
+                m_is_waiting_for_reach_min_duration = false;
             }
         } else if (m_is_waiting_for_reach_min_duration &&
                    (duration >= m_min_duration || is_signal_avpkt)) {
-            is_reached_the_min_duration = true;
-        }
-
-        if (is_reached_the_min_duration) {
             pthread_cond_signal(m_cond);
-            m_is_reached_the_min_duration = true;
             m_is_waiting_for_reach_min_duration = false;
         }
 
@@ -452,12 +461,17 @@ public:
         m_num++;
 
         int64_t duration = get_duration();
+
         bool is_signal_avpkt = src->size == 0;
+        bool is_eof_avpkt = src->data == m_eof_pkt->data;
+
+        if (is_eof_avpkt) {
+            src->data = NULL;
+        }
 
         if (m_is_waiting_for_reach_min_duration &&
             (duration >= m_min_duration || is_signal_avpkt)) {
             pthread_cond_signal(m_cond);
-            m_is_reached_the_min_duration = true;
             m_is_waiting_for_reach_min_duration = false;
         }
 
@@ -476,9 +490,12 @@ public:
         return JS_OK;
     }
 
-    JS_RET put_signal_avpkt(AVPacket *avpkt) {
+    JS_RET put_eof_avpkt() {
+        return (this->*put)(m_eof_pkt);
+    }
 
-        return JS_OK;
+    JS_RET put_flush_avpkt() {
+        return (this->*put)(m_flush_pkt);
     }
 
 };
@@ -512,7 +529,7 @@ public:
             if (m_is_aborted_get) {
                 goto aborted;
             }
-            if (m_is_reached_the_min_duration) {
+            if (!m_is_waiting_for_reach_min_duration) {
 
                 AVFrame *element = m_dequeue->front();
                 m_dequeue->pop_front();
@@ -520,7 +537,7 @@ public:
                 m_num--;
 
                 if (m_num == 0) {
-                    m_is_reached_the_min_duration = false;
+                    m_is_waiting_for_reach_min_duration = true;
                 }
 
                 if (m_is_waiting_for_insufficient_max_duration) {
@@ -533,7 +550,6 @@ public:
                 return element;
             } else {
 
-                m_is_waiting_for_reach_min_duration = true;
                 if (buffering_callback) {
                     buffering_callback(m_buffering_callback_data, true);
                 }
@@ -596,18 +612,17 @@ public:
         }
         m_dequeue->clear();
 
+        m_is_waiting_for_reach_min_duration = true;
+
         if (m_is_waiting_for_insufficient_max_duration) {
             pthread_cond_signal(m_cond);
             m_is_waiting_for_insufficient_max_duration = false;
         }
 
-        m_is_reached_the_min_duration = false;
-
-        pthread_mutex_unlock(m_mutex);
-
         if (clear_callback) {
             clear_callback(m_clear_callback_data);
         }
+        pthread_mutex_unlock(m_mutex);
     }
 
 
@@ -634,7 +649,6 @@ public:
             clear(false);
         } else if (m_is_waiting_for_reach_min_duration && duration >= m_min_duration) {
             pthread_cond_signal(m_cond);
-            m_is_reached_the_min_duration = true;
             m_is_waiting_for_reach_min_duration = false;
         }
 
@@ -663,7 +677,6 @@ public:
 
         if (m_is_waiting_for_reach_min_duration && duration >= m_min_duration) {
             pthread_cond_signal(m_cond);
-            m_is_reached_the_min_duration = true;
             m_is_waiting_for_reach_min_duration = false;
         }
 
@@ -681,7 +694,6 @@ public:
 
         return JS_OK;
     }
-
 
 };
 

@@ -160,7 +160,7 @@ JS_RET JSPlayer::find_stream_info() {
     ret = avformat_open_input(&m_format_ctx, m_url, NULL, NULL);
 
     if (ret != 0) {
-        LOGE("couldn't open input stream!>ret:%d:", ret);
+        LOGE("couldn't open input stream! ret=%d:", ret);
         return JS_ERR;
     } else {
         LOGD("avformat_open_input success");
@@ -570,6 +570,7 @@ void JSPlayer::on_surface_hold_state_changed() {
         if (m_egl_renderer->m_is_hold_surface) {
             cache_video_packet = &JSPlayer::cache_live_video_packet_hold_surface;
         } else {
+            m_is_cleared_video_frame = false;
             cache_video_packet = &JSPlayer::cache_live_video_packet_not_hold_surface;
         }
     }
@@ -597,16 +598,17 @@ JS_RET JSPlayer::cache_live_video_packet_not_hold_surface(AVPacket *src) {
     }
     av_packet_unref(src);
 
-    m_video_cached_que->clear(true);
-    LOGD("*drop* clear video packet.");
-    m_video_decoded_que->clear(false);
-    LOGD("*drop* clear video frame.");
-
-//    if (JS_OK !=
-//        (m_video_cached_que->*m_video_cached_que->put)(flush_pkt)) {
-//        LOGE("can't put video flush packet.");
-//        m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
-//    }
+    if (!m_is_cleared_video_frame) {
+        m_video_cached_que->clear(false);
+        LOGD("*drop* clear video packet.");
+        m_video_decoded_que->clear(false);
+        LOGD("*drop* clear video frame.");
+        if (JS_OK != m_video_cached_que->put_flush_avpkt()) {
+            LOGE("can't put video flush packet.");
+            m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+        }
+        m_is_cleared_video_frame = true;
+    }
 
     return JS_OK;
 }
@@ -736,10 +738,7 @@ void *read_frame_thread(void *data) {
 
                     if (player->m_has_audio_stream) {
 
-                        if (JS_OK !=
-                            (player->m_audio_cached_que->*player->m_audio_cached_que->put)(
-                                    eof_pkt)) {
-
+                        if (JS_OK != player->m_audio_cached_que->put_eof_avpkt()) {
                             LOGE("can't put audio eof packet.");
                             js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
                             break;
@@ -747,9 +746,7 @@ void *read_frame_thread(void *data) {
                     }
 
                     if (player->m_has_video_stream) {
-                        if (JS_OK !=
-                            (player->m_video_cached_que->*player->m_video_cached_que->put)(
-                                    eof_pkt)) {
+                        if (JS_OK != player->m_video_cached_que->put_eof_avpkt()) {
                             LOGE("can't put video eof packet.");
                             js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
                             break;
@@ -808,13 +805,10 @@ void *decode_video_thread(void *data) {
         if (avpkt == NULL) {
             break;
         }
-        if (avpkt->data == flush_pkt->data) {
+        if (avpkt->data == player->m_video_cached_que->m_flush_pkt->data) {
             (player->m_js_media_decoder->*player->m_js_media_decoder->video_decoder_flush)();
             av_packet_free(&avpkt);
             continue;
-        }
-        if (avpkt->data == NULL && avpkt->size == 0) {
-            LOGD("avpkt->data == NULL && avpkt->size == 0  111");
         }
 
         while (player->m_is_playing) {
@@ -836,7 +830,6 @@ void *decode_video_thread(void *data) {
                     break;
                 }
             } else if (ret == JS_ERR_EOF) {
-                LOGD("avpkt->data == NULL && avpkt->size == 0222");
                 av_packet_free(&avpkt);
                 // fixme invoke once.
                 player->m_js_event_handler->call_on_completed();
@@ -901,7 +894,7 @@ void *decode_audio_thread(void *data) {
         if (avpkt == NULL) {
             break;
         }
-        if (avpkt->data == flush_pkt->data) {
+        if (avpkt->data == player->m_audio_cached_que->m_flush_pkt->data) {
             (player->m_js_media_decoder->*player->m_js_media_decoder->audio_decoder_flush)();
             av_packet_free(&avpkt);
             continue;
@@ -1044,7 +1037,7 @@ void egl_buffer_queue_cb(void *data) {
         return;
     }
 
-//    usleep(71430);//todo sync video audio.
+//    usleep(40000);//todo sync video audio.
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
 }
@@ -1053,7 +1046,6 @@ void egl_buffer_queue_cb(void *data) {
 void audio_cached_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
     LOGD("*drop* drop audio frame (clear all)");
-
 }
 
 void video_cached_que_clear_callback(void *data) {
