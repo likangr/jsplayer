@@ -14,9 +14,10 @@ public:
     ~JSEventHandler();
 
 
-    void call_on_intercepted_pcm_data(uint8_t *data, int len, int channel_num);
+    void call_on_intercepted_pcm_data(short *pcm_data, size_t pcm_data_size, int channel_num);
 
-    void call_on_parse_data_from_video_packet(uint8_t *data, int size);
+    void
+    call_on_parse_data_from_video_packet(uint8_t *video_packet_data, int video_packet_data_size);
 
 
     void call_on_prepared();
@@ -31,8 +32,8 @@ public:
 
 private:
 
-    jobject m_java_js_player;
-    JSPlayer *m_native_js_player;
+    jobject m_js_player_obj;
+    JSPlayer *m_js_player;
 };
 
 

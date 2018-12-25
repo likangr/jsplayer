@@ -6,6 +6,7 @@
 #define JS_PLAYER_CLASS "com/joyshow/jsplayer/player/JSPlayer"
 #define JS_JNI_CALL
 #define METHOD_ARRAY_ELEMS(a)  (sizeof(a) / sizeof(a[0]))
+
 extern jmethodID midOnPrepared;
 extern jmethodID midOnInterceptedPcmData;
 extern jmethodID midOnError;
@@ -22,7 +23,13 @@ void JS_JNI_CALL set_loggable(JNIEnv *env, jclass clz, jboolean loggable);
 
 jboolean JS_JNI_CALL get_loggable(JNIEnv *env, jclass clz);
 
+void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, bool is_write_log_to_file);
+
+jboolean JS_JNI_CALL get_is_write_log_to_file(JNIEnv *env, jclass clz);
+
 void JS_JNI_CALL set_log_file_save_path(JNIEnv *env, jclass clz, jstring log_file_save_path);
+
+jstring JS_JNI_CALL get_log_file_save_path(JNIEnv *env, jclass clz);
 
 jlong JS_JNI_CALL create(JNIEnv *env, jobject obj);
 

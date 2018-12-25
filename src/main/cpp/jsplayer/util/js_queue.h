@@ -346,7 +346,7 @@ public:
 
         AVPacket *src = av_packet_alloc();
         if (src == NULL) {
-            LOGE("can't av_packet_alloc");
+            LOGE("%s can't av_packet_alloc", __func__);
             pthread_mutex_unlock(m_mutex);
             return JS_ERR;
         }
@@ -360,7 +360,7 @@ public:
                 m_is_need_to_drop_until_i_frame = false;
             } else {
                 av_packet_free(&src);
-                LOGD("*drop* drop a non-key frame until key video packet.");
+                LOGD("%s *drop* drop a non-key frame until key video packet.",__func__);
                 pthread_mutex_unlock(m_mutex);
                 return JS_OK;
             }
@@ -382,7 +382,11 @@ public:
                 clear(true);
             } else {
                 clear(false);
-                put_flush_avpkt();
+                if (JS_OK != put_flush_avpkt()) {
+                    LOGE("%s can't put video flush packet.", __func__);
+                    pthread_mutex_unlock(m_mutex);
+                    return JS_ERR;
+                }
             }
             if (m_is_waiting_for_reach_min_duration) {
                 pthread_cond_signal(m_cond);
@@ -405,7 +409,7 @@ public:
 
         AVPacket *src = av_packet_alloc();
         if (src == NULL) {
-            LOGE("can't av_packet_alloc");
+            LOGE("%s can't av_packet_alloc", __func__);
             pthread_mutex_unlock(m_mutex);
             return JS_ERR;
         }
@@ -428,7 +432,11 @@ public:
                 clear(true);
             } else {
                 clear(false);
-                put_flush_avpkt();
+                if (JS_OK != put_flush_avpkt()) {
+                    LOGE("%s can't put video flush packet.", __func__);
+                    pthread_mutex_unlock(m_mutex);
+                    return JS_ERR;
+                }
             }
             if (m_is_waiting_for_reach_min_duration) {
                 pthread_cond_signal(m_cond);
@@ -450,7 +458,7 @@ public:
 
         AVPacket *src = av_packet_alloc();
         if (src == NULL) {
-            LOGE("can't av_packet_alloc");
+            LOGE("%s can't av_packet_alloc", __func__);
             pthread_mutex_unlock(m_mutex);
             return JS_ERR;
         }

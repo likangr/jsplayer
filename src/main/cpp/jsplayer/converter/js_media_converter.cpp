@@ -8,7 +8,6 @@ JS_RET JSMediaCoverter::init_audio_converter(struct SwrContext *s,
                                              int out_channel,
                                              enum AVSampleFormat out_sample_fmt,
                                              int out_sample_rate,
-                                             int bytes_per_sample,
                                              int64_t in_ch_layout,
                                              int in_channel,
                                              enum AVSampleFormat in_sample_fmt,
@@ -17,7 +16,7 @@ JS_RET JSMediaCoverter::init_audio_converter(struct SwrContext *s,
     m_out_channel = out_channel;
     m_out_sample_fmt = out_sample_fmt;
     m_out_sample_rate = out_sample_rate;
-    m_bytes_per_sample = bytes_per_sample;
+    m_out_bytes_per_sample = av_get_bytes_per_sample(out_sample_fmt);
     m_in_ch_layout = in_ch_layout;
     m_in_channel = in_channel;
     m_in_sample_fmt = in_sample_fmt;
@@ -27,7 +26,7 @@ JS_RET JSMediaCoverter::init_audio_converter(struct SwrContext *s,
          "m_out_channel=%d,"
          "m_out_sample_fmt=%d,"
          "m_out_sample_rate=%d,"
-         "m_bytes_per_sample=%d,"
+         "m_out_bytes_per_sample=%d,"
          "m_in_ch_layout=%lld,"
          "m_in_channel=%d,"
          "m_in_sample_fmt=%d,"
@@ -37,7 +36,7 @@ JS_RET JSMediaCoverter::init_audio_converter(struct SwrContext *s,
          m_out_channel,
          m_out_sample_fmt,
          m_out_sample_rate,
-         m_bytes_per_sample,
+         m_out_bytes_per_sample,
          m_in_ch_layout,
          m_in_channel,
          m_in_sample_fmt,
@@ -66,7 +65,7 @@ void JSMediaCoverter::release_audio_converter() {
     m_in_channel = 0;
     m_out_sample_fmt = AV_SAMPLE_FMT_NONE;
     m_out_sample_rate = 0;
-    m_bytes_per_sample = 0;
+    m_out_bytes_per_sample = 0;
     m_in_ch_layout = 0;
     m_out_channel = 0;
     m_in_sample_fmt = AV_SAMPLE_FMT_NONE;
@@ -74,13 +73,13 @@ void JSMediaCoverter::release_audio_converter() {
 }
 
 
-unsigned int
-JSMediaCoverter::convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFrame *frame) {
+size_t
+JSMediaCoverter::convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFrame *frame) {
     //计算目标样本数  转换前后的样本数不一样  抓住一点 采样时间相等
     //src_nb_samples/src_rate=dst_nb_samples/dst_rate
 
     /**
-     * swr_get_delay==》返回之前没有处理的输入采样个数。
+     * swr_get_delay 返回之前没有处理的输入采样个数。
      * 如果提供的输入大于可用的输出空间，Swresample可以缓冲数据，《而且在采样率之间的转换需要延迟。不理解这句话？》
      * 这个函数返回所有这些延迟的总和。
      * 准确的延迟不一定是输入或输出采样率的整数值。特别是当下采样值很大时，输出采样率可能不是表示延迟的好选择，就像上采样率和输入采样率一样。
@@ -90,7 +89,7 @@ JSMediaCoverter::convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFram
             m_out_sample_rate,
             m_in_sample_rate, AV_ROUND_INF);
 
-    int ret = swr_convert(m_audio_swr_ctx, &convert_audio_buf, out_nb_samples,
+    int ret = swr_convert(m_audio_swr_ctx, &converted_pcm_data, out_nb_samples,
                           (const uint8_t **) frame->data,
                           frame->nb_samples);
 
@@ -98,12 +97,16 @@ JSMediaCoverter::convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFram
         return 0;
     }
 
-    int data_size = m_out_channel * out_nb_samples * m_bytes_per_sample;
+    size_t data_size = (size_t)m_out_channel * out_nb_samples * m_out_bytes_per_sample;
 
 //    LOGD("%s out_nb_samples=%d,data_size=%d", __func__,
 //         out_nb_samples, data_size);
 
-    return (unsigned int) data_size;
+    return data_size;
+}
+
+bool JSMediaCoverter::is_audio_converter_initialized() {
+    return m_audio_swr_ctx != NULL;
 }
 
 
@@ -132,9 +135,11 @@ JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
         frame->pts = info->presentationTimeUs;
     }
 
-    LOGD("%s js_MediaCodec_getOutputBuffer pts=%" PRId64, __func__, frame->pts);
+    LOGD("%s js_MediaCodec_getOutputBuffer pts=%"
+                 PRId64, __func__, frame->pts);
 
 
+    //todo add judge if already is i420.
     ret = ConvertToI420(data, size,
                         frame->data[0], frame->linesize[0],
                         frame->data[1], frame->linesize[1],
@@ -146,9 +151,9 @@ JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
 
     if (ret != 0) {
         if (ret == -1) {
-            LOGE("ConvertToI420 failed because invalid parameter");
+            LOGE("%s ConvertToI420 failed because invalid parameter", __func__);
         } else {
-            LOGE("ConvertToI420 failed don't know why.");
+            LOGE("%s ConvertToI420 failed don't know why.", __func__);
         }
 
         return JS_ERR;
@@ -203,7 +208,7 @@ int convert_sps_pps(const uint8_t *p_buf, size_t i_buf_size,
     /* */
     if (i_data_size < 7) {
 
-        LOGE("Input Metadata too small");
+        LOGE("%s Input Metadata too small", __func__);
         return JS_ERR;
     }
 
@@ -218,7 +223,7 @@ int convert_sps_pps(const uint8_t *p_buf, size_t i_buf_size,
         /* First time is SPS, Second is PPS */
         if (i_data_size < 1) {
 
-            LOGE("PPS too small after processing SPS/PPS %u",
+            LOGE("%s PPS too small after processing SPS/PPS %u", __func__,
                  i_data_size);
             return JS_ERR;
         }
@@ -229,7 +234,7 @@ int convert_sps_pps(const uint8_t *p_buf, size_t i_buf_size,
         for (unsigned int i = 0; i < i_loop_end; i++) {
             if (i_data_size < 2) {
 
-                LOGE("SPS is too small %u", i_data_size);
+                LOGE("%s SPS is too small %u", __func__, i_data_size);
                 return JS_ERR;
             }
 
@@ -239,13 +244,13 @@ int convert_sps_pps(const uint8_t *p_buf, size_t i_buf_size,
 
             if (i_data_size < i_nal_size) {
 
-                LOGE("SPS size does not match NAL specified size %u",
+                LOGE("%s SPS size does not match NAL specified size %u", __func__,
                      i_data_size);
                 return JS_ERR;
             }
             if (i_sps_pps_size + 4 + i_nal_size > i_out_buf_size) {
 
-                LOGE("Output SPS/PPS buffer too small");
+                LOGE("%s Output SPS/PPS buffer too small", __func__);
                 return JS_ERR;
             }
 

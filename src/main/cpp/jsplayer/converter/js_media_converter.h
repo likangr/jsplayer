@@ -13,7 +13,6 @@ extern "C" {
 #include "libswresample/swresample.h"
 }
 
-
 #define   DEFAULT_AV_PIX_FMT                            AV_PIX_FMT_YUV420P
 #define   DEFAULT_AV_SAMPLE_FMT                         AV_SAMPLE_FMT_S16
 #define   DST_BITS_PER_SAMPLE                           16
@@ -28,7 +27,7 @@ public:
     int m_out_channel = 0;
     enum AVSampleFormat m_out_sample_fmt = AV_SAMPLE_FMT_NONE;
     int m_out_sample_rate = 0;
-    int m_bytes_per_sample = 0;
+    int m_out_bytes_per_sample = 0;
     int64_t m_in_ch_layout = 0;
     int m_in_channel = 0;
     enum AVSampleFormat m_in_sample_fmt = AV_SAMPLE_FMT_NONE;
@@ -39,7 +38,6 @@ public:
                                 int out_channel,
                                 enum AVSampleFormat out_sample_fmt,
                                 int out_sample_rate,
-                                int bytes_per_sample,
                                 int64_t in_ch_layout,
                                 int in_channel,
                                 enum AVSampleFormat in_sample_fmt,
@@ -47,7 +45,9 @@ public:
 
     void release_audio_converter();
 
-    unsigned int convert_simple_format_to_S16(uint8_t *convert_audio_buf, AVFrame *frame);
+    bool is_audio_converter_initialized();
+
+    size_t convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFrame *frame);
 };
 
 

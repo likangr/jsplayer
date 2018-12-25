@@ -1,126 +1,78 @@
-#include "util/js_log.h"
-#include "libavutil/log.h"
-#include <android/log.h>
+#include "js_log.h"
+#include "js_jni.h"
 #include <time.h>
+#include <stdio.h>
+#include <pthread.h>
 
-#define LOG_BUF_SIZE     1024
+static bool loggable = false;
+static bool is_write_log_to_file = false;
+static char log_file_save_path[256] = {0};
+static pthread_mutex_t log_mutex0, *log_mutex = &log_mutex0;
+
+#define LOG_BUF_SIZE      1024
+#define LOG_TIME_SIZE     30
 #define LOG_TAG          "jsplayer"
 
-int LOGGABLE = 0;
-char *LOG_FILE_PATH = NULL;
+void init_logger() {
+    pthread_mutex_init(log_mutex, NULL);
+}
 
-void write_log(int prio, const char *tag, const char *text) {
+void deinit_logger() {
+    pthread_mutex_destroy(log_mutex);
+}
 
-    __android_log_write(prio, tag, text);
+void set_loggable_(bool loggable_) {
+    loggable = loggable_;
+}
+
+bool get_loggable_() {
+    return loggable;
+}
+
+void set_is_write_log_to_file_(bool is_write_log_to_file_) {
+    is_write_log_to_file = is_write_log_to_file_;
+}
+
+bool get_is_write_log_to_file_() {
+    return is_write_log_to_file;
+}
+
+void set_log_file_save_path_(char *log_file_save_path_) {
+    memset(log_file_save_path, sizeof(log_file_save_path), sizeof(char));
+    strcpy(log_file_save_path, log_file_save_path_);
+}
+
+void get_log_file_save_path_(char *log_file_save_path_) {
+    strcpy(log_file_save_path_, log_file_save_path);
+}
+
+void printf_log(int prio, const char *fmt, ...) {
+    if (!loggable) {
+        return;
+    }
+
+    va_list ap;
+    char log_buf[LOG_BUF_SIZE];
+    va_start(ap, fmt);
+    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
+    va_end(ap);
+    __android_log_write(prio, LOG_TAG, log_buf);
+
+    if (!is_write_log_to_file) {
+        return;
+    }
+    pthread_mutex_lock(log_mutex);
+    FILE *fp = fopen(log_file_save_path, "at");
+    if (!fp) {
+        return;
+    }
 
     time_t now_time;
     time(&now_time);
     struct tm *local_time = localtime(&now_time);
-    char log_time[30] = {'\0'};
-    strftime(log_time, 30, "[%Y-%m-%d %H:%M:%S] ", local_time);
-
-    FILE *fp;
-    fp = fopen(LOG_FILE_PATH, "at");
-    if (!fp) {
-        __android_log_write(ANDROID_LOG_ERROR, tag, "can't open js_log.txt");
-        return;
-    }
-
-    fprintf(fp, "js_log ");
-    fprintf(fp, "%s", log_time);
-    fprintf(fp, "%s\r\n", text);
+    char log_time[LOG_TIME_SIZE] = {0};
+    strftime(log_time, LOG_TIME_SIZE, "[%Y-%m-%d %H:%M:%S]", local_time);
+    fprintf(fp, "%s LogPriority=%d %s %s\r\n", log_time, prio, LOG_TAG, log_buf);
     fclose(fp);
-}
-
-void LOGV(const char *fmt, ...) {
-    if (!LOGGABLE)
-        return;
-
-    va_list ap;
-    char log_buf[LOG_BUF_SIZE];
-    va_start(ap, fmt);
-    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
-    va_end(ap);
-
-    write_log(ANDROID_LOG_VERBOSE, LOG_TAG, log_buf);
-}
-
-void LOGD(const char *fmt, ...) {
-    if (!LOGGABLE)
-        return;
-
-    va_list ap;
-    char log_buf[LOG_BUF_SIZE];
-    va_start(ap, fmt);
-    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
-    va_end(ap);
-
-    write_log(ANDROID_LOG_DEBUG, LOG_TAG, log_buf);
-}
-
-void LOGI(const char *fmt, ...) {
-    if (!LOGGABLE)
-        return;
-
-    va_list ap;
-    char log_buf[LOG_BUF_SIZE];
-    va_start(ap, fmt);
-    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
-    va_end(ap);
-
-    write_log(ANDROID_LOG_INFO, LOG_TAG, log_buf);
-}
-
-void LOGW(const char *fmt, ...) {
-    if (!LOGGABLE)
-        return;
-
-    va_list ap;
-    char log_buf[LOG_BUF_SIZE];
-    va_start(ap, fmt);
-    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
-    va_end(ap);
-
-    write_log(ANDROID_LOG_WARN, LOG_TAG, log_buf);
-}
-
-void LOGE(const char *fmt, ...) {
-    if (!LOGGABLE)
-        return;
-
-    va_list ap;
-    char log_buf[LOG_BUF_SIZE];
-    va_start(ap, fmt);
-    vsnprintf(log_buf, LOG_BUF_SIZE, fmt, ap);
-    va_end(ap);
-
-    write_log(ANDROID_LOG_ERROR, LOG_TAG, log_buf);
-}
-
-
-void ffp_log_callback_report(void *ptr, int level, const char *fmt, va_list vl) {
-    if (!LOGGABLE)
-        return;
-    int ffplv = ANDROID_LOG_VERBOSE;
-    if (level <= AV_LOG_ERROR)
-        ffplv = ANDROID_LOG_ERROR;
-    else if (level <= AV_LOG_WARNING)
-        ffplv = ANDROID_LOG_WARN;
-    else if (level <= AV_LOG_INFO)
-        ffplv = ANDROID_LOG_INFO;
-    else if (level <= AV_LOG_VERBOSE)
-        ffplv = ANDROID_LOG_VERBOSE;
-    else
-        ffplv = ANDROID_LOG_DEBUG;
-
-
-    va_list vl2;
-    char line[1024];
-    static int print_prefix = 1;
-
-    va_copy(vl2, vl);
-    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
-    va_end(vl2);
-
-    write_log(ffplv, LOG_TAG, line);
+    pthread_mutex_unlock(log_mutex);
 }

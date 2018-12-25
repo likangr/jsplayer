@@ -19,7 +19,10 @@ static JNINativeMethod js_player_methods[] = {
         {"nativeSetupJNI",                                  "()V",                                      (void *) native_setup_jni},
         {"setLoggable",                                     "(Z)V",                                     (void *) set_loggable},
         {"getLoggable",                                     "()Z",                                      (jboolean *) get_loggable},
+        {"setIsWriteLogToFile",                             "(Z)V",                                     (void *) set_is_write_log_to_file},
+        {"getIsWriteLogToFile",                             "()Z",                                      (jboolean *) get_is_write_log_to_file},
         {"setLogFileSavePath",                              "(Ljava/lang/String;)V",                    (void *) set_log_file_save_path},
+        {"getLogFileSavePath",                              "()Ljava/lang/String;",                     (jstring *) get_log_file_save_path},
         {"create",                                          "()J",                                      (jlong *) create},
         {"setOption",                                       "(JLjava/lang/String;Ljava/lang/String;)V", (void *) set_option},
         {"getOption",                                       "(JLjava/lang/String;)Ljava/lang/String;",  (jstring *) get_option},
@@ -58,23 +61,18 @@ JNIEXPORT jint JS_JNI_CALL JNI_OnLoad(
 //    }
 
     js_jni_set_java_vm(vm, NULL);
-    JNIEnv *env = js_jni_get_env(NULL);
-    register_js_player_methods(env);
-
+    register_js_player_methods(js_jni_get_env(NULL));
+    init_logger();
     return JNI_VERSION_1_6;
 }
 
 JNIEXPORT void JS_JNI_CALL JNI_OnUnload(JavaVM *vm, void *reserved) {
-    LOGE("likang JNI_OnUnload");
 //    if (__JS_NDK_MEDIACODEC_LINKED__) {
 //        close_ndk_mediacodec();
 //    }
 
     avformat_network_deinit();
-
-    if (LOG_FILE_PATH) {
-        free(LOG_FILE_PATH);
-    }
+    deinit_logger();
 }
 
 
@@ -82,28 +80,38 @@ void JS_JNI_CALL native_setup_jni(JNIEnv *env, jclass cls) {
 
     av_register_all();
     avformat_network_init();
-//    if (LOGGABLE)
-//        av_log_set_callback(ffp_log_callback_report);
 }
 
 void JS_JNI_CALL set_loggable(JNIEnv *env, jclass cls, jboolean loggable) {
-
-    LOGGABLE = loggable ? 1 : 0;
+    set_loggable_(loggable);
 }
 
 
 jboolean JS_JNI_CALL get_loggable(JNIEnv *env, jclass cls) {
+    return get_loggable_();
+}
 
-    return (jboolean) LOGGABLE;
+void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, bool is_write_log_to_file) {
+    set_is_write_log_to_file_(is_write_log_to_file);
+}
+
+jboolean JS_JNI_CALL get_is_write_log_to_file(JNIEnv *env, jclass clz) {
+    return get_is_write_log_to_file_();
 }
 
 void JS_JNI_CALL
 set_log_file_save_path(JNIEnv *env, jclass cls, jstring log_file_save_path) {
-    if (LOG_FILE_PATH) {
-        free(LOG_FILE_PATH);
-    }
-    LOG_FILE_PATH = js_jni_jstring_to_utf_chars(env, log_file_save_path, NULL);
+    char *path = js_jni_jstring_to_utf_chars(js_jni_get_env(NULL), log_file_save_path, NULL);
+    set_log_file_save_path_(path);
+    free(path);
 }
+
+jstring JS_JNI_CALL get_log_file_save_path(JNIEnv *env, jclass clz) {
+    char path[256] = {0};
+    get_log_file_save_path_(path);
+    return env->NewStringUTF(path);
+}
+
 
 jlong JS_JNI_CALL create(JNIEnv *env, jobject obj) {
 
@@ -172,10 +180,11 @@ void JS_JNI_CALL prepare(JNIEnv *env, jobject obj, jlong handle) {
 
     JSPlayer *player = (JSPlayer *) handle;
     if (!player->m_url) {
-        LOGE("prepare failed, url is null...");
+        LOGE("%s failed, url is null...", __func__);
         return;
     }
-    LOGD("prepare current url is %s, url length=%d", player->m_url, strlen(player->m_url));
+    LOGD("%s prepare current url is %s, url length=%d", __func__, player->m_url,
+         strlen(player->m_url));
     player->prepare();
 }
 
@@ -298,7 +307,7 @@ void JS_JNI_CALL
 set_native_intercepted_pcm_data_callback_handle(JNIEnv *env, jobject obj, jlong handle,
                                                 jlong callback_handle) {
     JSPlayer *player = (JSPlayer *) handle;
-    player->native_intercepted_pcm_data_callback = (void (*)(jlong, short *, int,
+    player->native_intercepted_pcm_data_callback = (void (*)(int64_t, short *, size_t ,
                                                              int)) (callback_handle);
 }
 
@@ -343,3 +352,30 @@ void JS_JNI_CALL register_js_player_methods(JNIEnv *env) {
     midOnBuffering = env->GetMethodID(cls, "onBuffering", "(Z)V");
 
 }
+//
+//#include "libavutil/log.h"
+////    av_log_set_callback(ffp_log_callback_report);
+//void ffp_log_callback_report(void *ptr, int level, const char *fmt, va_list vl) {
+//
+//    int ffplv;
+//    if (level <= AV_LOG_ERROR)
+//        ffplv = ANDROID_LOG_ERROR;
+//    else if (level <= AV_LOG_WARNING)
+//        ffplv = ANDROID_LOG_WARN;
+//    else if (level <= AV_LOG_INFO)
+//        ffplv = ANDROID_LOG_INFO;
+//    else if (level <= AV_LOG_VERBOSE)
+//        ffplv = ANDROID_LOG_VERBOSE;
+//    else
+//        ffplv = ANDROID_LOG_DEBUG;
+//
+//    va_list vl2;
+//    char line[1024];
+//    static int print_prefix = 1;
+//
+//    va_copy(vl2, vl);
+//    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
+//    va_end(vl2);
+//
+//    printf_log(ffplv, line);
+//}

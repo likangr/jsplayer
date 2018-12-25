@@ -559,7 +559,7 @@ public class JSPlayer extends FrameLayout {
      */
     public interface OnInterceptedPcmDataCallback {
 
-        void onInterceptedPcmData(JSPlayer player, short[] data, int sampleNum, int channelNum);
+        void onInterceptedPcmData(JSPlayer player, short[] pcmData, int sampleNum, int channelNum);
 
     }
 
@@ -611,9 +611,9 @@ public class JSPlayer extends FrameLayout {
     /**
      * called by native.
      */
-    private void onInterceptedPcmData(short[] data, int sampleNum, int channelNum) {
+    private void onInterceptedPcmData(short[] pcmData, int sampleNum, int channelNum) {
         if (mOnInterceptedPcmDataCallback != null) {
-            mOnInterceptedPcmDataCallback.onInterceptedPcmData(JSPlayer.this, data, sampleNum, channelNum);
+            mOnInterceptedPcmDataCallback.onInterceptedPcmData(JSPlayer.this, pcmData, sampleNum, channelNum);
         }
     }
 
@@ -786,6 +786,8 @@ public class JSPlayer extends FrameLayout {
     }
 
 
+    /******player basic controller******/
+
     private static native void nativeSetupJNI();
 
     private native long create();
@@ -836,10 +838,17 @@ public class JSPlayer extends FrameLayout {
 
     private native void setNativeParseDataFromVideoPacketCallbackHandle(long handle, long callbackHandle);
 
+    /******logger******/
 
     public static native void setLoggable(boolean loggable);
 
     public static native boolean getLoggable();
 
+    public static native void setIsWriteLogToFile(boolean isWriteLogToFile);
+
+    public static native boolean getIsWriteLogToFile();
+
     public static native void setLogFileSavePath(String logFileSavePath);
+
+    public static native String getLogFileSavePath();
 }

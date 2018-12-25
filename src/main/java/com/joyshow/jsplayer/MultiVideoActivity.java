@@ -2,8 +2,11 @@ package com.joyshow.jsplayer;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Environment;
 
 import com.joyshow.jsplayer.player.JSPlayer;
+
+import java.io.File;
 
 /**
  * @author likangren
@@ -11,14 +14,18 @@ import com.joyshow.jsplayer.player.JSPlayer;
  */
 public class MultiVideoActivity extends Activity {
 
+    private static String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
+
+    static {
+        JSPlayer.setLoggable(true);
+        JSPlayer.setIsWriteLogToFile(true);
+        JSPlayer.setLogFileSavePath(SDCARD_PATH + File.separator + "simple_video_activity_log.txt");
+    }
+
     private JSPlayer player1;
     private JSPlayer player2;
     private JSPlayer player3;
     private JSPlayer player4;
-
-    {
-        JSPlayer.setLoggable(true);
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

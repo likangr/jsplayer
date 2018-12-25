@@ -21,41 +21,43 @@ JSAudioPlayer::~JSAudioPlayer() {
     sl_android_simple_buffer_queue_callback = NULL;
 }
 
-JS_RET JSAudioPlayer::create_engine() {
+JS_RET JSAudioPlayer::create_audio_player_engine() {
 
     SLresult ret;
     // create engine
-    ret = slCreateEngine(&m_engine_object, 0, NULL, 0, NULL, NULL);
+    ret = slCreateEngine(&m_player_engine_object_itf, 0, NULL, 0, NULL, NULL);
     if (ret != SL_RESULT_SUCCESS) {
-        LOGE("create engine failed: errcode=%d", ret);
+        LOGE("%s create engine failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     // realize the engine
-    ret = (*m_engine_object)->Realize(m_engine_object, SL_BOOLEAN_FALSE);
+    ret = (*m_player_engine_object_itf)->Realize(m_player_engine_object_itf, SL_BOOLEAN_FALSE);
     if (ret != SL_RESULT_SUCCESS) {
-        LOGE("realize engine failed: errcode=%d", ret);
+        LOGE("%s realize engine failed: errcode=%d", __func__, ret);
         goto fail;
     }
     // get the engine interface, which is needed in order to create other objects
-    ret = (*m_engine_object)->GetInterface(m_engine_object, SL_IID_ENGINE, &m_engine_engine);
+    ret = (*m_player_engine_object_itf)->GetInterface(m_player_engine_object_itf, SL_IID_ENGINE,
+                                                      &m_player_engine_itf);
     if (ret != SL_RESULT_SUCCESS) {
-        LOGE("get engine interface failed: errcode=%d", ret);
+        LOGE("%s get engine interface failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
 
     // create output mix, with environmental reverb specified as a non-required interface
-    ret = (*m_engine_engine)->CreateOutputMix(m_engine_engine, &m_output_mix_object, 0, 0, 0);
+    ret = (*m_player_engine_itf)->CreateOutputMix(m_player_engine_itf, &m_output_mix_object_itf, 0,
+                                                  0, 0);
     if (ret != SL_RESULT_SUCCESS) {
-        LOGE("create output mix failed: errcode=%d", ret);
+        LOGE("%s create output mix failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     // realize the output mix
-    ret = (*m_output_mix_object)->Realize(m_output_mix_object, SL_BOOLEAN_FALSE);
+    ret = (*m_output_mix_object_itf)->Realize(m_output_mix_object_itf, SL_BOOLEAN_FALSE);
     if (ret != SL_RESULT_SUCCESS) {
-        LOGE("realize output mix failed: errcode=%d", ret);
+        LOGE("%s realize output mix failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
@@ -63,12 +65,14 @@ JS_RET JSAudioPlayer::create_engine() {
     // this could fail if the environmental reverb effect is not available,
     // either because the feature is not present, excessive CPU load, or
     // the required MODIFY_AUDIO_SETTINGS permission was not requested and granted
-    ret = (*m_output_mix_object)->GetInterface(m_output_mix_object, SL_IID_ENVIRONMENTALREVERB,
-                                               &m_output_mix_environmental_reverb);
+    ret = (*m_output_mix_object_itf)->GetInterface(m_output_mix_object_itf,
+                                                   SL_IID_ENVIRONMENTALREVERB,
+                                                   &m_output_mix_environmental_reverb_itf);
     if (ret == SL_RESULT_SUCCESS) {
-        LOGE("get m_output_mix_environmental_reverb interface failed: errcode=%d", ret);
-        (*m_output_mix_environmental_reverb)->SetEnvironmentalReverbProperties(
-                m_output_mix_environmental_reverb, &m_reverb_settings);
+        LOGE("%s get m_output_mix_environmental_reverb_itf interface failed: errcode=%d", __func__,
+             ret);
+        (*m_output_mix_environmental_reverb_itf)->SetEnvironmentalReverbProperties(
+                m_output_mix_environmental_reverb_itf, &m_reverb_settings);
     }
 
     return JS_OK;
@@ -79,13 +83,13 @@ JS_RET JSAudioPlayer::create_engine() {
 }
 
 // create buffer m_dequeue audio player
-JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_sample, void *data) {
+JS_RET JSAudioPlayer::create_audio_player(int rate, int channel, int bit_per_sample, void *data) {
 
 
-    LOGD("create_AudioPlayer:%d,%d", rate, channel);
+    LOGD("%s create_audio_player:%d,%d", __func__, rate, channel);
 
-    if (create_engine() != JS_OK) {
-        LOGE("create_AudioPlayer failed to create engine");
+    if (create_audio_player_engine() != JS_OK) {
+        LOGE("%s create_audio_player failed to create engine", __func__);
         return JS_ERR;
     }
 
@@ -115,7 +119,7 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
     SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
     // configure audio sink
-    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, m_output_mix_object};
+    SLDataLocator_OutputMix loc_outmix = {SL_DATALOCATOR_OUTPUTMIX, m_output_mix_object_itf};
     SLDataSink audioSnk = {&loc_outmix, NULL};
 
 //    // create audio player
@@ -125,90 +129,93 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
                                       SL_IID_MUTESOLO, SL_IID_VOLUME};
         const SLboolean req[4] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE,
                                   SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
-        ret = (*m_engine_engine)->CreateAudioPlayer(m_engine_engine, &m_bq_player_object, &audioSrc,
-                                                    &audioSnk,
-                                                    4, ids, req);
+        ret = (*m_player_engine_itf)->CreateAudioPlayer(m_player_engine_itf, &m_player_object_itf,
+                                                        &audioSrc,
+                                                        &audioSnk,
+                                                        4, ids, req);
     } else {
         const SLInterfaceID ids[3] = {SL_IID_BUFFERQUEUE, SL_IID_EFFECTSEND, SL_IID_VOLUME};
         const SLboolean req[3] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE,
                                   SL_BOOLEAN_TRUE};
-        ret = (*m_engine_engine)->CreateAudioPlayer(m_engine_engine, &m_bq_player_object, &audioSrc,
-                                                    &audioSnk,
-                                                    3, ids, req);
+        ret = (*m_player_engine_itf)->CreateAudioPlayer(m_player_engine_itf, &m_player_object_itf,
+                                                        &audioSrc,
+                                                        &audioSnk,
+                                                        3, ids, req);
     }
 
 
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("createAudioPlayer failed: errcode=%d", ret);
+        LOGE("%s createAudioPlayer failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
 
     // realize the player
-    ret = (*m_bq_player_object)->Realize(m_bq_player_object, SL_BOOLEAN_FALSE);
+    ret = (*m_player_object_itf)->Realize(m_player_object_itf, SL_BOOLEAN_FALSE);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("realize player failed: errcode=%d", ret);
+        LOGE("%s realize player failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     // get the play interface
-    ret = (*m_bq_player_object)->GetInterface(m_bq_player_object, SL_IID_PLAY, &m_bq_player_play);
+    ret = (*m_player_object_itf)->GetInterface(m_player_object_itf, SL_IID_PLAY, &m_player_itf);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("get play interface failed: errcode=%d", ret);
+        LOGE("%s get play interface failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     // get the buffer m_dequeue interface
-    ret = (*m_bq_player_object)->GetInterface(m_bq_player_object, SL_IID_BUFFERQUEUE,
-                                              &m_bq_player_buffer_queue);
+    ret = (*m_player_object_itf)->GetInterface(m_player_object_itf, SL_IID_BUFFERQUEUE,
+                                               &m_player_buffer_queue_itf);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("get buffer m_dequeue interface failed: errcode=%d", ret);
+        LOGE("%s get buffer m_dequeue interface failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     if (sl_android_simple_buffer_queue_callback == NULL) {
-        LOGE("sl_android_simple_buffer_queue_callback is null ,please use set_audio_buffer_queue_callback to set the sl_android_simple_buffer_queue_callback first");
+        LOGE("%s sl_android_simple_buffer_queue_callback is null", __func__);
         goto fail;
     }
 
     // register callback on the bufferQueue
-    ret = (*m_bq_player_buffer_queue)->RegisterCallback(m_bq_player_buffer_queue,
-                                                        sl_android_simple_buffer_queue_callback,
-                                                        data);
+    ret = (*m_player_buffer_queue_itf)->RegisterCallback(m_player_buffer_queue_itf,
+                                                         sl_android_simple_buffer_queue_callback,
+                                                         data);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("register sl_android_simple_buffer_queue_callback on the buffer m_dequeue failed: errcode=%d",
+        LOGE("%s register sl_android_simple_buffer_queue_callback on the buffer m_dequeue failed: errcode=%d",
+             __func__,
              ret);
         goto fail;
     }
 
     // get the effect send interface
-    ret = (*m_bq_player_object)->GetInterface(m_bq_player_object, SL_IID_EFFECTSEND,
-                                              &m_bq_player_effect_send);
+    ret = (*m_player_object_itf)->GetInterface(m_player_object_itf, SL_IID_EFFECTSEND,
+                                               &m_player_effect_send_itf);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("get effect send interface failed: errcode=%d", ret);
+        LOGE("%s get effect send interface failed: errcode=%d", __func__, ret);
         goto fail;
     }
     // mute/solo is not supported for sources that are known to be mono, as this is
     // get the mute/solo interface
     if (m_channel_count > 1) {
-        ret = (*m_bq_player_object)->GetInterface(m_bq_player_object, SL_IID_MUTESOLO,
-                                                  &m_bq_player_mute_solo);
+        ret = (*m_player_object_itf)->GetInterface(m_player_object_itf, SL_IID_MUTESOLO,
+                                                   &m_player_mute_solo_itf);
         if (SL_RESULT_SUCCESS != ret) {
-            LOGE("get m_bq_player_mute_solo interface failed: errcode=%d", ret);
+            LOGE("%s get m_player_mute_solo_itf interface failed: errcode=%d", __func__, ret);
         }
     }
     // get the volume interface
-    ret = (*m_bq_player_object)->GetInterface(m_bq_player_object, SL_IID_VOLUME,
-                                              &m_bq_player_volume);
+    ret = (*m_player_object_itf)->GetInterface(m_player_object_itf, SL_IID_VOLUME,
+                                               &m_player_volume_itf);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("get the m_bq_player_volume interface failed: errcode=%d", ret);
+        LOGE("%s get the m_player_volume_itf interface failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
     // set the player's state to playing
-    ret = (*m_bq_player_play)->SetPlayState(m_bq_player_play, SL_PLAYSTATE_PLAYING);
+    ret = (*m_player_itf)->SetPlayState(m_player_itf, SL_PLAYSTATE_PLAYING);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("set the player's state to playing failed: errcode=%d", ret);
+        LOGE("%s set the player's state to playing failed: errcode=%d", __func__, ret);
         goto fail;
     }
 
@@ -230,24 +237,36 @@ JS_RET JSAudioPlayer::create_AudioPlayer(int rate, int channel, int bit_per_samp
 }
 
 
-JS_RET JSAudioPlayer::enqueue(const void *buffer, unsigned int size) {
+JS_RET JSAudioPlayer::enqueue_buffer(const void *buffer, unsigned int size) {
 
     SLresult ret;
-    // enqueue another buffer
-    ret = (*m_bq_player_buffer_queue)->Enqueue(m_bq_player_buffer_queue, buffer,
-                                               size);
+    // enqueue_buffer another buffer
+    ret = (*m_player_buffer_queue_itf)->Enqueue(m_player_buffer_queue_itf, buffer,
+                                                size);
+
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("enqueue failed: errcode=%d", ret);
+        LOGE("%s enqueue_buffer failed: errcode=%d", __func__, ret);
         return JS_ERR;
     }
     return JS_OK;
 }
 
+int64_t JSAudioPlayer::get_position() {
+    SLresult ret;
+    SLmillisecond sec;
+    ret = (*m_player_itf)->GetPosition(m_player_itf, &sec);
+    if (SL_RESULT_SUCCESS != ret) {
+        LOGE("%s GetPosition failed: errcode=%d", __func__, ret);
+        return -1;
+    }
+    return sec * 1000;
+}
+
 JS_RET JSAudioPlayer::clear() {
     SLresult ret;
-    ret = (*m_bq_player_buffer_queue)->Clear(m_bq_player_buffer_queue);
+    ret = (*m_player_buffer_queue_itf)->Clear(m_player_buffer_queue_itf);
     if (SL_RESULT_SUCCESS != ret) {
-        LOGE("clear failed: errcode=%d", ret);
+        LOGE("%s clear failed: errcode=%d", __func__, ret);
         return JS_ERR;
     }
     return JS_OK;
@@ -261,11 +280,11 @@ void JSAudioPlayer::set_audio_buffer_queue_callback(slAndroidSimpleBufferQueueCa
 void JSAudioPlayer::set_mute(bool mute) {
 
     if (m_is_created_audio_player) {
-        SLresult ret = (*m_bq_player_volume)->
-                SetMute(m_bq_player_volume,
+        SLresult ret = (*m_player_volume_itf)->
+                SetMute(m_player_volume_itf,
                         mute);
         if (SL_RESULT_SUCCESS != ret) {
-            LOGE("set_mute failed: errcode=%d", ret);
+            LOGE("%s set_mute failed: errcode=%d", __func__, ret);
             return;
         }
     }
@@ -276,15 +295,15 @@ void JSAudioPlayer::set_volume(int volume) {
 
     if (m_is_created_audio_player) {
         if (volume > 100 || volume < 0) {
-            LOGE("set_volume want m_volume is %d ,not in [0, 100]", volume);
+            LOGE("%s set_volume want m_volume is %d ,not in [0, 100]", __func__, volume);
             return;
         }
 
-        SLresult ret = (*m_bq_player_volume)->
-                SetVolumeLevel(m_bq_player_volume,
+        SLresult ret = (*m_player_volume_itf)->
+                SetVolumeLevel(m_player_volume_itf,
                                (SLmillibel) ((1.0f - volume / 100.0f) * -5000));
         if (SL_RESULT_SUCCESS != ret) {
-            LOGE("set_volume failed: errcode=%d", ret);
+            LOGE("%s set_volume failed: errcode=%d", __func__, ret);
             return;
         }
     }
@@ -295,19 +314,20 @@ void JSAudioPlayer::set_volume(int volume) {
 void JSAudioPlayer::set_channel_mute(int channel, bool mute) {
 
     if (m_channel_count != 2) {
-        LOGW("unsupport operation: set_channel_mute when channel count != 2");
+        LOGW("%s unsupport operation: set_channel_mute when channel count != 2", __func__);
         return;
     }
     if (m_is_created_audio_player) {
-        if (NULL != m_bq_player_mute_solo) {
-            SLresult ret = (*m_bq_player_mute_solo)->SetChannelMute(m_bq_player_mute_solo, channel,
-                                                                    mute);
+        if (NULL != m_player_mute_solo_itf) {
+            SLresult ret = (*m_player_mute_solo_itf)->SetChannelMute(m_player_mute_solo_itf,
+                                                                     channel,
+                                                                     mute);
             if (SL_RESULT_SUCCESS != ret) {
-                LOGE("set_channel_mute failed: errcode=%d", ret);
+                LOGE("%s set_channel_mute failed: errcode=%d", __func__, ret);
                 return;
             }
         } else {
-            LOGE("set_channel_mute failed m_bq_player_mute_solo is null");
+            LOGE("%s set_channel_mute failed m_player_mute_solo_itf is null", __func__);
         }
     }
 
@@ -326,27 +346,27 @@ void JSAudioPlayer::reset() {
     m_bits_per_sample = 0;
 
     // destroy buffer m_dequeue audio player object, and invalidate all associated interfaces
-    if (m_bq_player_object != NULL) {
-        (*m_bq_player_object)->Destroy(m_bq_player_object);
-        m_bq_player_object = NULL;
-        m_bq_player_play = NULL;
-        m_bq_player_buffer_queue = NULL;
-        m_bq_player_effect_send = NULL;
-        m_bq_player_mute_solo = NULL;
-        m_bq_player_volume = NULL;
+    if (m_player_object_itf != NULL) {
+        (*m_player_object_itf)->Destroy(m_player_object_itf);
+        m_player_object_itf = NULL;
+        m_player_itf = NULL;
+        m_player_buffer_queue_itf = NULL;
+        m_player_effect_send_itf = NULL;
+        m_player_mute_solo_itf = NULL;
+        m_player_volume_itf = NULL;
     }
     // destroy output mix object, and invalidate all associated interfaces
-    if (m_output_mix_object != NULL) {
-        (*m_output_mix_object)->Destroy(m_output_mix_object);
-        m_output_mix_object = NULL;
-        m_output_mix_environmental_reverb = NULL;
+    if (m_output_mix_object_itf != NULL) {
+        (*m_output_mix_object_itf)->Destroy(m_output_mix_object_itf);
+        m_output_mix_object_itf = NULL;
+        m_output_mix_environmental_reverb_itf = NULL;
     }
 
     // destroy engine object, and invalidate all associated interfaces
-    if (m_engine_object != NULL) {
-        (*m_engine_object)->Destroy(m_engine_object);
-        m_engine_object = NULL;
-        m_engine_engine = NULL;
+    if (m_player_engine_object_itf != NULL) {
+        (*m_player_engine_object_itf)->Destroy(m_player_engine_object_itf);
+        m_player_engine_object_itf = NULL;
+        m_player_engine_itf = NULL;
     }
 
 }

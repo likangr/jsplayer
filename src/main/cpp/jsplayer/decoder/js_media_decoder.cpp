@@ -121,7 +121,8 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
     }
     js_MediaFormat_setBuffer(format, "csd-0", convert_buffer, sps_pps_size);
     for (int i = 0; i < sps_pps_size; i += 4) {
-        LOGE("csd-0[%d]: %02x%02x%02x%02x", (int) sps_pps_size, (int) convert_buffer[i + 0],
+        LOGD("%s csd-0[%d]: %02x%02x%02x%02x", __func__, (int) sps_pps_size,
+             (int) convert_buffer[i + 0],
              (int) convert_buffer[i + 1], (int) convert_buffer[i + 2],
              (int) convert_buffer[i + 3]);
     }
@@ -156,7 +157,6 @@ JS_RET JSMediaDecoder::create_video_hw_decoder() {
 
     m_video_hw_dec = video_hw_dec;
     m_video_hw_dec_ctx = video_hw_dec_ctx;
-    m_video_hw_dec_ctx->format = format;
 
     LOGD("%s success", __func__);
     return JS_OK;
@@ -213,7 +213,7 @@ JS_RET JSMediaDecoder::create_sw_decoder_by_av_stream(AVStream *av_stream) {
     //transform
     ret = avcodec_parameters_to_context(av_codec_ctx, avCodecParas);
     if (ret < 0) {
-        LOGE("%s copy the codec parameters to context fail!>ret:%d", __func__, ret);
+        LOGE("%s copy the codec parameters to context fail! ret:%d", __func__, ret);
         goto fail;
     }
 
@@ -419,7 +419,8 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
             return JS_ERR_EXTERNAL;
         }
 
-        LOGD("buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", buffer_size, avpkt->size,
+        LOGD("%s buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", __func__, buffer_size,
+             avpkt->size,
              buffer_size > avpkt->size);
 
         int64_t pts;
@@ -461,7 +462,8 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
             memcpy(buffer, avpkt->data, (size_t) avpkt->size);
         }
 
-        LOGD("%s js_MediaCodec_queueInputBuffer pts=%" PRId64, __func__,
+        LOGD("%s js_MediaCodec_queueInputBuffer pts=%"
+                     PRId64, __func__,
              pts);
 
         ret = js_MediaCodec_queueInputBuffer(m_video_hw_dec, (size_t) index, 0,
@@ -487,7 +489,7 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
 void JSMediaDecoder::set_decoder_type(const char *decoder_type) {
     m_decoder_type = (char *) malloc(strlen(decoder_type));
     sprintf(m_decoder_type, "%s", decoder_type);
-    LOGD("m_decoder_type=%s", m_decoder_type);
+    LOGD("%s m_decoder_type=%s", __func__,m_decoder_type);
 
     if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW) ||
         !strcmp(decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {

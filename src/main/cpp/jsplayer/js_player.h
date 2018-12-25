@@ -8,7 +8,10 @@
 #include "util/js_queue.h"
 #include "js_constant.h"
 
-//time_base AV_TIME_BASE_Q
+enum {
+    AV_SYNC_EXTERNAL_CLOCK,
+    AV_SYNC_AUDIO_MASTER
+};
 
 class JSPlayer;
 
@@ -168,20 +171,25 @@ public:
     bool m_mute = false;
     bool m_left_channel_mute = false;
     bool m_right_channel_mute = false;
-    uint8_t m_convert_audio_buffer[MAX_AUDIO_FRAME_SIZE * 3 / 2];//fixme  如何确定 MAX_AUDIO_FRAME_SIZE
 
     /*func pointers*/
 
-    void (*native_intercepted_pcm_data_callback)(jlong native_js_player,
+    void (*native_intercepted_pcm_data_callback)(int64_t native_js_player,
                                                  short *pcm_data,
-                                                 int sample_num,
+                                                 size_t pcm_data_size,
                                                  int channel_num);
 
-    void (*native_parse_data_from_video_packet_callback)(jlong native_js_player, uint8_t *data,
-                                                         int size);
+    void (*native_parse_data_from_video_packet_callback)(int64_t native_js_player,
+                                                         uint8_t *video_packet_data,
+                                                         int video_packet_data_size);
 
     /*sync audio and video control field*/
+    int m_av_sync_type = AV_SYNC_AUDIO_MASTER;
 
+    int64_t m_cur_video_pts = -1;
+    int64_t m_cur_audio_start_pts = -1;
+    int64_t m_cur_audio_pts = -1;
+    int64_t m_cur_audio_position = -1;
 };
 
 /***

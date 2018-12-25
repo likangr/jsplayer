@@ -20,8 +20,10 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     private static String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
 
-    {
+    static {
         JSPlayer.setLoggable(true);
+        JSPlayer.setIsWriteLogToFile(true);
+        JSPlayer.setLogFileSavePath(SDCARD_PATH + File.separator + "simple_video_activity_log.txt");
     }
 
     private JSPlayer mPlayer;
@@ -35,7 +37,6 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         setContentView(R.layout.activity_simple_video);
 
         mPlayer = (JSPlayer) findViewById(R.id.jsplayer);
-        JSPlayer.setLogFileSavePath(Environment.getExternalStorageDirectory().getPath() + File.separator + "simple_video_log.txt");
 //        mPlayer.setUrl("http://live.hkstv.hk.lxdns.com/live/hks/playlist.m3u8");
 //        mPlayer.setUrl("http://221.120.177.59/hls/i3d7ragr.m3u8");
 //        mPlayer.setUrl("http://58.221.254.33:1935/live/zhongwen.sdp/playlist.m3u8");
@@ -55,11 +56,14 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl("rtmp://pull-g.kktv8.com/livekktv/100987038");
 //        mPlayer.setUrl("rtmp://v1.one-tv.com/live/mpegts.stream");
 
-//        mPlayer.setUrl("http://221.228.226.23/11/t/j/v/b/tjvbwspwhqdmgouolposcsfafpedmb/sh.yinyuetai.com/691201536EE4912BF7E4F1E2C67B8119.mp4");
+        mPlayer.setUrl("http://221.228.226.23/11/t/j/v/b/tjvbwspwhqdmgouolposcsfafpedmb/sh.yinyuetai.com/691201536EE4912BF7E4F1E2C67B8119.mp4");
 //        mPlayer.setUrl("http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4");
 //        mPlayer.setUrl("http://v.ysbang.cn//data/video/2015/rkb/2015rkb01.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
-        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "cyby1.mp4");
 
 
         mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
@@ -151,7 +155,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     @Override
     public void onBuffering(JSPlayer player, boolean isBuffering) {
-        Logger.d(TAG, "onBuffering isBuffering="+isBuffering);
+        Logger.d(TAG, "onBuffering isBuffering=" + isBuffering);
 
     }
 }

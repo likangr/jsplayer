@@ -55,7 +55,7 @@ void JSEglRenderer::release_egl() {
 int JSEglRenderer::query_surface_width() {
     EGLint width = 0;
     if (!eglQuerySurface(m_display, m_surface, EGL_WIDTH, &width)) {
-        LOGE("[EGL] eglQuerySurface(EGL_WIDTH) returned error %d", eglGetError());
+        LOGE("%s [EGL] eglQuerySurface(EGL_WIDTH) returned error %d", __func__, eglGetError());
         return 0;
     }
     return width;
@@ -64,7 +64,7 @@ int JSEglRenderer::query_surface_width() {
 int JSEglRenderer::query_surface_height() {
     EGLint height = 0;
     if (!eglQuerySurface(m_display, m_surface, EGL_HEIGHT, &height)) {
-        LOGE("[EGL] eglQuerySurface(EGL_HEIGHT) returned error %d", eglGetError());
+        LOGE("%s [EGL] eglQuerySurface(EGL_HEIGHT) returned error %d", __func__, eglGetError());
         return 0;
     }
     return height;
@@ -79,7 +79,7 @@ void *render_thread(void *data) {
         goto end;
     }
     if (renderer->egl_setup() != JS_OK) {
-        LOGE("JSEglRenderer failed to egl_setup");
+        LOGE("%s JSEglRenderer failed to egl_setup", __func__);
         goto fail;
     }
 
@@ -93,7 +93,7 @@ void *render_thread(void *data) {
         }
 
         if (!renderer->m_is_start_render) {
-            LOGE("wait_for_start_render");
+            LOGD("%s wait_for_start_render", __func__);
             renderer->m_is_waiting_for_start_render = true;
             pthread_cond_wait(renderer->m_start_render_cond, renderer->m_mutex);
             renderer->m_is_waiting_for_start_render = false;
@@ -102,7 +102,7 @@ void *render_thread(void *data) {
             }
         }
         if (!renderer->m_is_hold_surface) {
-            LOGE("wait_for_create_surface");
+            LOGD("%s wait_for_create_surface", __func__);
             renderer->m_is_waiting_for_create_surface = true;
             pthread_cond_wait(renderer->m_create_surface_cond, renderer->m_mutex);
             renderer->m_is_waiting_for_create_surface = false;
@@ -130,7 +130,7 @@ void *render_thread(void *data) {
 //            int ret = ANativeWindow_setBuffersGeometry(renderer->m_native_window, width, height,
 //                                                       renderer->m_format);
 //            if (ret) {
-//                LOGE("ANativeWindow_setBuffersGeometry() returned error %d", ret);
+//                LOGE("%s ANativeWindow_setBuffersGeometry() returned error %d", __func__,ret);
 //                goto fail;
 //            }
 
@@ -139,18 +139,18 @@ void *render_thread(void *data) {
                                                                renderer->m_config,
                                                                renderer->m_native_window,
                                                                0))) {
-                LOGE("eglCreateWindowSurface() returned error %d", eglGetError());
+                LOGE("%s eglCreateWindowSurface() returned error %d", __func__, eglGetError());
                 goto fail;
             }
 
             if (!eglMakeCurrent(renderer->m_display, renderer->m_surface, renderer->m_surface,
                                 renderer->m_context)) {
-                LOGE("eglMakeCurrent() returned error %d", eglGetError());
+                LOGE("%s eglMakeCurrent() returned error %d", __func__, eglGetError());
                 goto fail;
             }
 
             if (renderer->init_renderer() != JS_OK) {
-                LOGE("JSEglRenderer failed to init_renderer");
+                LOGE("%s JSEglRenderer failed to init_renderer", __func__);
                 goto fail;
             }
 
@@ -159,7 +159,7 @@ void *render_thread(void *data) {
 
 
 //        if (renderer->m_is_window_size_changed) {
-//            LOGD("glViewport m_window_width=%d,m_window_height=%d",
+//            LOGD("%s glViewport m_window_width=%d,m_window_height=%d",
 //                 renderer->m_window_width,
 //                 renderer->m_window_height);
 //
@@ -186,7 +186,7 @@ void *render_thread(void *data) {
     renderer->release_egl();
     renderer->m_js_event_handler->call_on_error(JS_ERR_EGL_RENDERER_SETUP_RENDERER_FAILED, 0,
                                                 0);
-    LOGE("egl thread exit unexpected.");
+    LOGE("%s egl thread exit unexpected.", __func__);
     renderer->m_is_renderer_thread_running = false;
     renderer->m_is_start_render = false;
     pthread_mutex_unlock(renderer->m_mutex);
@@ -195,7 +195,7 @@ void *render_thread(void *data) {
 
 
 JS_RET JSEglRenderer::egl_setup() {
-    LOGD("egl_setup");
+    LOGD("%s egl_setup...", __func__);
 
     EGLint numConfigs;
 
@@ -217,26 +217,26 @@ JS_RET JSEglRenderer::egl_setup() {
     };
 
     if ((display = eglGetDisplay(EGL_DEFAULT_DISPLAY)) == EGL_NO_DISPLAY) {
-        LOGE("eglGetDisplay() returned error %d", eglGetError());
+        LOGE("%s eglGetDisplay() returned error %d", __func__, eglGetError());
         goto fail;
     }
     if (!eglInitialize(display, 0, 0)) {
-        LOGE("eglInitialize() returned error %d", eglGetError());
+        LOGE("%s eglInitialize() returned error %d", __func__, eglGetError());
         goto fail;
     }
 
     if (!eglChooseConfig(display, configAttribs, &m_config, 1, &numConfigs)) {
-        LOGE("eglChooseConfig() returned error %d", eglGetError());
+        LOGE("%s eglChooseConfig() returned error %d", __func__, eglGetError());
         goto fail;
     }
 
     if (!eglGetConfigAttrib(display, m_config, EGL_NATIVE_VISUAL_ID, &m_format)) {
-        LOGE("eglGetConfigAttrib() returned error %d", eglGetError());
+        LOGE("%s eglGetConfigAttrib() returned error %d", __func__, eglGetError());
         goto fail;
     }
 
     if (!(context = eglCreateContext(display, m_config, 0, contextAttribs))) {
-        LOGE("eglCreateContext() returned error %d", eglGetError());
+        LOGE("%s eglCreateContext() returned error %d", __func__, eglGetError());
         goto fail;
     }
 
@@ -260,7 +260,7 @@ JS_RET JSEglRenderer::egl_setup() {
 
 JS_RET JSEglRenderer::init_renderer() {
 
-    LOGD("init_renderer");
+    LOGD("%s init_renderer...", __func__);
 
     JS_RET ret;
 
@@ -306,7 +306,7 @@ GLuint JSEglRenderer::compile_shader(const char *pSource, GLenum shaderType) {
                 char *buf = (char *) malloc(infoLen);
                 if (buf) {
                     glGetShaderInfoLog(shader, infoLen, NULL, buf);
-                    LOGE("Could not compile shader %d: %s", shaderType, buf);
+                    LOGE("%s Could not compile shader %d: %s", __func__, shaderType, buf);
                     free(buf);
                 }
             }
@@ -351,7 +351,7 @@ JS_RET JSEglRenderer::use_configured_program() {
             char *buf = (char *) malloc(bufLength);
             if (buf) {
                 glGetProgramInfoLog(program, bufLength, NULL, buf);
-                LOGE("Could not link program:%s", buf);
+                LOGE("%s Could not link program:%s", __func__, buf);
                 free(buf);
             }
         }
@@ -390,7 +390,7 @@ void JSEglRenderer::render(AVFrame *frame) {
                                                    m_format);
 
         if (ret) {
-            LOGE("ANativeWindow_setBuffersGeometry(format) returned error %d", ret);
+            LOGE("%s ANativeWindow_setBuffersGeometry(format) returned error %d", __func__, ret);
             goto failed;
         }
 
@@ -421,7 +421,7 @@ void JSEglRenderer::render(AVFrame *frame) {
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
     if (!eglSwapBuffers(m_display, m_surface)) {
-        LOGW("eglSwapBuffers() returned error %d", eglGetError());
+        LOGE("%s eglSwapBuffers() returned error %d", __func__, eglGetError());
         goto failed;
     }
 
@@ -438,7 +438,7 @@ void JSEglRenderer::set_egl_buffer_queue_callback(EGL_BUFFER_QUEUE_CALLBACK call
 
 
 void JSEglRenderer::create_renderer_thread() {
-    LOGD("create_renderer_thread...");
+    LOGD("%s create_renderer_thread...", __func__);
     pthread_mutex_lock(m_mutex);
     if (m_is_renderer_thread_running) {
         return;
@@ -449,7 +449,7 @@ void JSEglRenderer::create_renderer_thread() {
 }
 
 void JSEglRenderer::destroy_renderer_thread() {
-    LOGD("destroy_renderer_thread1...");
+    LOGD("%s destroy_renderer_thread1...", __func__);
     pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
@@ -462,11 +462,11 @@ void JSEglRenderer::destroy_renderer_thread() {
     }
     pthread_mutex_unlock(m_mutex);
     pthread_join(m_render_tid, NULL);
-    LOGD("destroy_renderer_thread2...");
+    LOGD("%s destroy_renderer_thread2...", __func__);
 }
 
 void JSEglRenderer::create_surface(jobject surface) {
-    LOGD("create_surface");
+    LOGD("%s create_surface", __func__);
 
     pthread_mutex_lock(m_mutex);
     m_native_window = ANativeWindow_fromSurface(js_jni_get_env(NULL), surface);
@@ -481,8 +481,9 @@ void JSEglRenderer::create_surface(jobject surface) {
 //void JSEglRenderer::window_size_changed(int width, int height) {
 //
 //    pthread_mutex_lock(m_mutex);
-//    LOGD("m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
-//         m_window_width,
+//    LOGD("%s m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
+//       __func__,
+//          m_window_width,
 //         m_window_height,
 //         width,
 //         height);
@@ -499,7 +500,7 @@ void JSEglRenderer::create_surface(jobject surface) {
 
 
 void JSEglRenderer::destroy_surface() {
-    LOGD("destroy_surface1");
+    LOGD("%s destroy_surface1", __func__);
 
     pthread_mutex_lock(m_mutex);
     ANativeWindow_release(m_native_window);
@@ -507,12 +508,12 @@ void JSEglRenderer::destroy_surface() {
     m_is_hold_surface = false;
     pthread_mutex_unlock(m_mutex);
     while (!m_is_waiting_for_start_render && !m_is_waiting_for_create_surface);
-    LOGD("destroy_surface2");
+    LOGD("%s destroy_surface2", __func__);
 }
 
 
 void JSEglRenderer::start_render() {
-    LOGD("start_render1...");
+    LOGD("%s start_render1...", __func__);
     pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
@@ -520,11 +521,11 @@ void JSEglRenderer::start_render() {
     m_is_start_render = true;
     pthread_cond_signal(m_start_render_cond);
     pthread_mutex_unlock(m_mutex);
-    LOGD("start_render2...");
+    LOGD("%s start_render2...", __func__);
 }
 
 void JSEglRenderer::stop_render() {
-    LOGD("stop_render1...");
+    LOGD("%s stop_render1...", __func__);
     pthread_mutex_lock(m_mutex);
     if (!m_is_renderer_thread_running) {
         return;
@@ -532,5 +533,5 @@ void JSEglRenderer::stop_render() {
     m_is_start_render = false;
     pthread_mutex_unlock(m_mutex);
     while (!m_is_waiting_for_create_surface && !m_is_waiting_for_start_render);
-    LOGD("stop_render2...");
+    LOGD("%s stop_render2...", __func__);
 }

@@ -615,7 +615,7 @@ js_MediaCodecList_getCodecNameByType(const char *mime, int profile, int encoder,
                 jsize len = (*env)->GetArrayLength(env, jint_arr);
 
                 for (int i = 0; i < len; i++) {
-                    LOGE("likang color=0x%x , %d", int_arr[i], int_arr[i]);
+                    LOGD("%s support color format=0x%x , %d", __func__, int_arr[i], int_arr[i]);
                 }
 
                 if (jint_arr) {

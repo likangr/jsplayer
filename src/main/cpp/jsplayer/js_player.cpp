@@ -11,7 +11,7 @@ extern "C" {
 //todo use func pointer reduce if-else
 
 JSPlayer::JSPlayer(jobject java_js_player) {
-    LOGD("new JSPlayer");
+    LOGD("%s new JSPlayer", __func__);
 
     m_java_js_player = (jobject) js_jni_get_env(NULL)->NewGlobalRef(java_js_player);
     m_js_event_handler = new JSEventHandler(m_java_js_player, this);
@@ -24,12 +24,13 @@ JSPlayer::JSPlayer(jobject java_js_player) {
     m_audio_player->set_audio_buffer_queue_callback(opensles_buffer_queue_cb);
 
     m_js_media_decoder = new JSMediaDecoder(m_js_event_handler);
+    m_js_media_converter = new JSMediaCoverter();
 
     m_cur_play_status = PLAY_STATUS_CREATED;
 }
 
 JSPlayer::~JSPlayer() {
-    LOGD("destroy JSPlayer");
+    LOGD("%s destroy JSPlayer", __func__);
 
     if (m_url != NULL) {
         free((void *) m_url);
@@ -41,10 +42,11 @@ JSPlayer::~JSPlayer() {
     delete m_audio_player;
     delete m_js_media_decoder;
     delete m_js_event_handler;
+    delete m_js_media_converter;
 }
 
 void JSPlayer::prepare() {
-    LOGD("prepare...");
+    LOGD("%s prepare...", __func__);
     reset();
     m_io_time_out = DEFAULT_PREPARE_TIME_OUT_MICROSECONDS;
     if (!m_egl_renderer->m_is_renderer_thread_running) {
@@ -56,7 +58,7 @@ void JSPlayer::prepare() {
 
 
 void JSPlayer::play(bool is_to_resume) {
-    LOGD("play...");
+    LOGD("%s play...", __func__);
     m_is_playing = true;
     if (is_to_resume) {
         if (m_is_live) {
@@ -76,7 +78,7 @@ void JSPlayer::play(bool is_to_resume) {
 
         pthread_create(&m_play_audio_tid, NULL, play_audio_thread,
                        this);
-        LOGD("play_audio_thread...");
+        LOGD("%s play_audio_thread...", __func__);
     }
     if (m_has_video_stream) {
         m_video_cached_que->clear_abort_get();
@@ -87,36 +89,37 @@ void JSPlayer::play(bool is_to_resume) {
         start_decode_video();
 
         m_egl_renderer->start_render();
-        LOGD("start_render...");
+        LOGD("%s start_render...", __func__);
     }
     m_cur_play_status = PLAY_STATUS_PLAYING;
-    LOGD("playing.");
+    LOGD("%s playing.", __func__);
 }
 
 void JSPlayer::pause() {
-    LOGD("pause...");
+    LOGD("%s pause...", __func__);
     stop_play(true);
+    m_cur_audio_position = -1;
     m_cur_play_status = PLAY_STATUS_PAUSED;
-    LOGD("paused.");
+    LOGD("%s paused.", __func__);
 }
 
 
 void JSPlayer::resume() {
-    LOGD("resume...");
+    LOGD("%s resume...", __func__);
     play(true);
-    LOGD("resumed.");
+    LOGD("%s resumed.", __func__);
 }
 
 
 void JSPlayer::stop() {
-    LOGD("stop...");
+    LOGD("%s stop...", __func__);
     reset();
     m_cur_play_status = PLAY_STATUS_STOPPED;
-    LOGD("stopped.");
+    LOGD("%s stopped.", __func__);
 }
 
 void JSPlayer::reset() {
-    LOGD("reset...");
+    LOGD("%s reset...", __func__);
     if (m_cur_play_status == PLAY_STATUS_PREPARING) {
         stop_prepare();
         free_res();
@@ -133,24 +136,24 @@ void JSPlayer::reset() {
     }
 
     m_cur_play_status = PLAY_STATUS_CREATED;
-    LOGD("reset.");
+    LOGD("%s reset.", __func__);
 }
 
 
 void JSPlayer::destroy() {
-    LOGD("destroy...");
+    LOGD("%s destroy...", __func__);
     reset();
     delete this;
-    LOGD("destroyed.");
+    LOGD("%s destroyed.", __func__);
 }
 
 
 JS_RET JSPlayer::find_stream_info() {
-    LOGD("find_stream_info...");
+    LOGD("%s find_stream_info...", __func__);
     JS_RET ret;
     m_format_ctx = avformat_alloc_context();
     if (!m_format_ctx) {
-        LOGE("failed to malloc m_format_ctx");
+        LOGE("%s failed to avformat_alloc_context", __func__);
         return JS_ERR;
     }
 
@@ -160,24 +163,19 @@ JS_RET JSPlayer::find_stream_info() {
     ret = avformat_open_input(&m_format_ctx, m_url, NULL, NULL);
 
     if (ret != 0) {
-        LOGE("couldn't open input stream! ret=%d:", ret);
+        LOGE("%s couldn't open input stream! ret=%d:", __func__, ret);
         return JS_ERR;
     } else {
-        LOGD("avformat_open_input success");
+        LOGD("%s avformat_open_input success", __func__);
     }
-
 
     ret = avformat_find_stream_info(m_format_ctx, NULL);
 
-    if (LOGGABLE)
-        av_dump_format(m_format_ctx, 0, m_url, 0);
-
     if (ret < 0) {
-        LOGE("couldn't find open stream information!>ret:%d:", ret);
+        LOGE("%s couldn't find open stream information! ret:%d:", __func__, ret);
         return JS_ERR;
     } else {
-
-        LOGD("avformat_find_stream_info", ret);
+        LOGD("%s avformat_find_stream_info", __func__, ret);
     }
 
     m_video_stream_index = av_find_best_stream(m_format_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
@@ -187,9 +185,13 @@ JS_RET JSPlayer::find_stream_info() {
     m_has_audio_stream = m_audio_stream_index != AVERROR_STREAM_NOT_FOUND;
     m_has_video_stream = m_video_stream_index != AVERROR_STREAM_NOT_FOUND;
 
+    if (!m_has_audio_stream && !m_has_video_stream) {
+        LOGE("%s couldn't find any stream!", __func__);
+        return JS_ERR;
+    }
 
     m_is_live = is_live(m_format_ctx);
-    LOGD("m_is_live=%d", m_is_live);
+    LOGD("%s m_is_live=%d", __func__, m_is_live);
 
     if (m_is_live) {//todo can set  value in another func?
         if (m_min_cached_duration == -1) {
@@ -220,24 +222,24 @@ JS_RET JSPlayer::find_stream_info() {
         }
     }
 
-    LOGD("duration threshold ： m_min_cached_duration=%"
-         PRId64
-         ","
-         "m_max_cached_duration=%"
-         PRId64
-         ","
-         "m_min_decoded_duration=%"
-         PRId64
-         ","
-         "m_max_decoded_duration=%"
-         PRId64
-         "",
+    LOGD("%s duration threshold ： m_min_cached_duration=%"
+                 PRId64
+                 ","
+                 "m_max_cached_duration=%"
+                 PRId64
+                 ","
+                 "m_min_decoded_duration=%"
+                 PRId64
+                 ","
+                 "m_max_decoded_duration=%"
+                 PRId64
+                 "", __func__,
          m_min_cached_duration,
          m_max_cached_duration,
          m_min_decoded_duration,
          m_max_decoded_duration);
 
-    LOGD("find_stream_info finish.");
+    LOGD("%s find_stream_info finish.", __func__);
 
     return JS_OK;
 }
@@ -255,41 +257,23 @@ void JSPlayer::init_decoder() {
 }
 
 JS_RET JSPlayer::prepare_audio() {
-    LOGD("prepare_audio...");
+    LOGD("%s prepare_audio...", __func__);
     JS_RET ret;
     m_audio_stream = m_format_ctx->streams[m_audio_stream_index];
 
     ret = (m_js_media_decoder->*m_js_media_decoder->m_create_decoder_by_av_stream)(m_audio_stream);
     if (ret != JS_OK) {
-        LOGE("prepare_audio failed to m_create_decoder_by_av_stream");
+        LOGE("%s prepare_audio failed to m_create_decoder_by_av_stream", __func__);
         return JS_ERR;
     }
 
-    if (m_audio_stream->codecpar->format != DEFAULT_AV_SAMPLE_FMT) {
-        m_js_media_converter = new JSMediaCoverter();
-        ret = m_js_media_converter->init_audio_converter(NULL,
-                                                         m_audio_stream->codecpar->channel_layout,
-                                                         m_audio_stream->codecpar->channels,
-                                                         DEFAULT_AV_SAMPLE_FMT,
-                                                         m_audio_stream->codecpar->sample_rate,
-                                                         DST_BYTES_PER_SAMPLE,
-                                                         m_audio_stream->codecpar->channel_layout,
-                                                         m_audio_stream->codecpar->channels,
-                                                         (AVSampleFormat) m_audio_stream->codecpar->format,
-                                                         m_audio_stream->codecpar->sample_rate);
-        if (ret != JS_OK) {
-            LOGE("unable to init audio converter !");
-            return JS_ERR;
-        }
-    }
-
-    ret = m_audio_player->create_AudioPlayer(
+    ret = m_audio_player->create_audio_player(
             m_audio_stream->codecpar->sample_rate,
             m_audio_stream->codecpar->channels,
             DST_BITS_PER_SAMPLE,
             this);
     if (ret != JS_OK) {
-        LOGE("unable to create_AudioPlayer!");
+        LOGE("%s unable to create_audio_player!", __func__);
         return JS_ERR;
     }
 
@@ -320,18 +304,18 @@ JS_RET JSPlayer::prepare_audio() {
         cache_audio_packet = &JSPlayer::cache_record_audio_packet;
     }
 
-    LOGD("prepare_audio finish.");
+    LOGD("%s prepare_audio finish.", __func__);
     return JS_OK;
 }
 
 JS_RET JSPlayer::prepare_video() {
-    LOGD("prepare_video...");
+    LOGD("%s prepare_video...", __func__);
     JS_RET ret;
     m_video_stream = m_format_ctx->streams[m_video_stream_index];
 
     ret = (m_js_media_decoder->*m_js_media_decoder->m_create_decoder_by_av_stream)(m_video_stream);
     if (ret != JS_OK) {
-        LOGE("prepare_video failed to m_create_decoder_by_av_stream");
+        LOGE("%s prepare_video failed to m_create_decoder_by_av_stream", __func__);
         return JS_ERR;
     }
 
@@ -364,30 +348,30 @@ JS_RET JSPlayer::prepare_video() {
         cache_video_packet = &JSPlayer::cache_record_video_packet;
     }
 
-    LOGD("prepare_video finish.");
+    LOGD("%s prepare_video finish.", __func__);
     return JS_OK;
 }
 
 
 void JSPlayer::start_read_frame() {
-    LOGD("start_read_frame...");
+    LOGD("%s start_read_frame...", __func__);
     m_io_time_out = DEFAULT_READ_PKT_TIME_OUT_MICROSECONDS;
     pthread_create(&m_read_packet_tid, NULL, read_frame_thread, this);
     m_is_reading_frame = true;
 }
 
 void JSPlayer::start_decode_audio() {
-    LOGD("start_decode_audio...");
+    LOGD("%s start_decode_audio...", __func__);
     pthread_create(&m_decode_audio_tid, NULL, decode_audio_thread, this);
 }
 
 void JSPlayer::start_decode_video() {
-    LOGD("start_decode_video...");
+    LOGD("%s start_decode_video...", __func__);
     pthread_create(&m_decode_video_tid, NULL, decode_video_thread, this);
 }
 
 void JSPlayer::stop_read_frame() {
-    LOGD("stop_read_frame...");
+    LOGD("%s stop_read_frame...", __func__);
     if (m_has_video_stream && !m_is_live) {
         m_video_cached_que->abort_put();
     }
@@ -407,12 +391,12 @@ void JSPlayer::stop_read_frame() {
         m_audio_cached_que->clear(false);
         m_audio_decoded_que->clear(false);
     }
-    LOGD("stop_read_frame finished.");
+    LOGD("%s stop_read_frame finished.", __func__);
 }
 
 
 void JSPlayer::stop_play(bool is_to_pause) {
-    LOGD("stop_play...");
+    LOGD("%s stop_play...", __func__);
     m_is_playing = false;
 
     if (m_has_video_stream) {
@@ -423,14 +407,14 @@ void JSPlayer::stop_play(bool is_to_pause) {
             m_video_decoded_que->abort_put();
         }
 
-        LOGD("stop_play stop decode video step1.");
+        LOGD("%s stop_play stop decode video step1.", __func__);
         pthread_join(m_decode_video_tid, NULL);
-        LOGD("stop_play stop decode video step2.");
+        LOGD("%s stop_play stop decode video step2.", __func__);
 
 
-        LOGD("stop_play stop render step1.");
+        LOGD("%s stop_play stop render step1.", __func__);
         m_egl_renderer->stop_render();
-        LOGD("stop_play stop render step2.");
+        LOGD("%s stop_play stop render step2.", __func__);
 
     }
 
@@ -442,13 +426,13 @@ void JSPlayer::stop_play(bool is_to_pause) {
             m_audio_decoded_que->abort_put();
         }
 
-        LOGD("stop_play stop decode audio step1.");
+        LOGD("%s stop_play stop decode audio step1.", __func__);
         pthread_join(m_decode_audio_tid, NULL);
-        LOGD("stop_play stop decode audio step2.");
+        LOGD("%s stop_play stop decode audio step2.", __func__);
 
-        LOGD("stop_play stop play audio step1.");
+        LOGD("%s stop_play stop play audio step1.", __func__);
         while (m_is_audio_data_consuming);
-        LOGD("stop_play stop play audio step2.");
+        LOGD("%s stop_play stop play audio step2.", __func__);
     }
 
     if (!is_to_pause || m_is_live) {
@@ -456,20 +440,20 @@ void JSPlayer::stop_play(bool is_to_pause) {
         stop_read_frame();
     }
 
-    LOGD("stop_play finished.");
+    LOGD("%s stop_play finished.", __func__);
 }
 
 
 void JSPlayer::stop_prepare() {
-    LOGD("stop_prepare...");
+    LOGD("%s stop_prepare...", __func__);
     m_io_time_out = NO_TIME_OUT_MICROSECONDS;
     pthread_join(m_prepare_tid, NULL);
-    LOGD("stop_prepare finished.");
+    LOGD("%s stop_prepare finished.", __func__);
 }
 
 
 void JSPlayer::free_res() {
-    LOGD("free_res...");
+    LOGD("%s free_res...", __func__);
 
     m_is_eof = false;
 
@@ -516,16 +500,10 @@ void JSPlayer::free_res() {
         avformat_free_context(m_format_ctx);
         m_format_ctx = NULL;
     }
-    if (m_js_media_converter != NULL) {
-        m_js_media_converter->release_audio_converter();
-        delete m_js_media_converter;
-        m_js_media_converter = NULL;
-    }
-
 
     m_audio_player->reset();
     m_js_media_decoder->reset();
-    LOGD("free_res finished.");
+    LOGD("%s free_res finished.", __func__);
 }
 
 
@@ -582,7 +560,6 @@ JS_RET JSPlayer::cache_record_video_packet(AVPacket *src) {
 }
 
 JS_RET JSPlayer::cache_live_video_packet_hold_surface(AVPacket *src) {
-    //如果视频流中有自定义实时数据或命令 可以通过这个函数解析,仅限于直播流。
     if (m_is_parse_data_from_video_packet) {
         m_js_event_handler->call_on_parse_data_from_video_packet(src->data,
                                                                  src->size);
@@ -591,7 +568,6 @@ JS_RET JSPlayer::cache_live_video_packet_hold_surface(AVPacket *src) {
 }
 
 JS_RET JSPlayer::cache_live_video_packet_not_hold_surface(AVPacket *src) {
-    //如果视频流中有自定义实时数据或命令 可以通过这个函数解析,仅限于直播流。
     if (m_is_parse_data_from_video_packet) {
         m_js_event_handler->call_on_parse_data_from_video_packet(src->data,
                                                                  src->size);
@@ -600,12 +576,12 @@ JS_RET JSPlayer::cache_live_video_packet_not_hold_surface(AVPacket *src) {
 
     if (!m_is_cleared_video_frame) {
         m_video_cached_que->clear(false);
-        LOGD("*drop* clear video packet.");
+        LOGD("%s *drop* clear video packet.", __func__);
         m_video_decoded_que->clear(false);
-        LOGD("*drop* clear video frame.");
+        LOGD("%s *drop* clear video frame.", __func__);
         if (JS_OK != m_video_cached_que->put_flush_avpkt()) {
-            LOGE("can't put video flush packet.");
-            m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+            LOGE("%s can't put video flush packet.", __func__);
+            m_js_event_handler->call_on_error(JS_ERR_CACHE_PACKET_FAILED, 0, 0);
         }
         m_is_cleared_video_frame = true;
     }
@@ -632,7 +608,7 @@ bool JSPlayer::get_mute() {
 
 void JSPlayer::set_channel_mute(int channel, bool mute) {
     if (m_audio_stream->codecpar->channels != 2) {
-        LOGW("unsupport operation: set_channel_mute when channel count != 2");
+        LOGW("%s unsupport operation: set_channel_mute when channel count != 2", __func__);
         return;
     }
     if (channel == 0) {
@@ -653,7 +629,7 @@ void *prepare_thread(void *data) {
     player->set_cur_timing();
     int ret = player->find_stream_info();
     if (ret != JS_OK) {
-        LOGE("find_stream_info error");
+        LOGE("%s find_stream_info error", __func__);
         goto fail;
     }
 
@@ -663,12 +639,12 @@ void *prepare_thread(void *data) {
         ret = player->prepare_audio();
 
         if (ret != JS_OK) {
-            LOGE("prepare_audio error");
+            LOGE("%s prepare_audio error", __func__);
             goto fail;
 
         }
     } else {
-        LOGW("prepare_audio didn't find a audio stream");
+        LOGW("%s prepare_audio didn't find a audio stream", __func__);
     }
 
     if (player->m_has_video_stream) {
@@ -676,12 +652,12 @@ void *prepare_thread(void *data) {
         ret = player->prepare_video();
 
         if (ret != JS_OK) {
-            LOGE("prepare_video error");
+            LOGE("%s prepare_video error", __func__);
             goto fail;
 
         }
     } else {
-        LOGW("prepare_video didn't find a video stream");
+        LOGW("%s prepare_video didn't find a video stream", __func__);
     }
 
     player->m_cur_play_status = PLAY_STATUS_PREPARED;
@@ -739,16 +715,16 @@ void *read_frame_thread(void *data) {
                     if (player->m_has_audio_stream) {
 
                         if (JS_OK != player->m_audio_cached_que->put_eof_avpkt()) {
-                            LOGE("can't put audio eof packet.");
-                            js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
+                            LOGE("%s can't put audio eof packet.", __func__);
+                            js_event_handler->call_on_error(JS_ERR_CACHE_PACKET_FAILED, 0, 0);
                             break;
                         }
                     }
 
                     if (player->m_has_video_stream) {
                         if (JS_OK != player->m_video_cached_que->put_eof_avpkt()) {
-                            LOGE("can't put video eof packet.");
-                            js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
+                            LOGE("%s can't put video eof packet.", __func__);
+                            js_event_handler->call_on_error(JS_ERR_CACHE_PACKET_FAILED, 0, 0);
                             break;
                         }
                     }
@@ -763,21 +739,21 @@ void *read_frame_thread(void *data) {
 
         if (packet->stream_index == player->m_audio_stream_index) {
             if (JS_OK != (player->*player->cache_audio_packet)(packet)) {
-                LOGE("can't cache audio packet.");
+                LOGE("%s can't cache audio packet.", __func__);
                 av_packet_unref(packet);
-                js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
+                js_event_handler->call_on_error(JS_ERR_CACHE_PACKET_FAILED, 0, 0);
                 break;
             }
         } else if (packet->stream_index == player->m_video_stream_index) {
             if (JS_OK != (player->*player->cache_video_packet)(packet)) {
-                LOGE("can't cache video packet.");
+                LOGE("%s can't cache video packet.", __func__);
                 av_packet_unref(packet);
-                js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
+                js_event_handler->call_on_error(JS_ERR_CACHE_PACKET_FAILED, 0, 0);
                 break;
             }
         } else {
 
-            LOGD("*drop* drop a packet unsupported.");
+            LOGD("%s *drop* drop a packet unsupported.", __func__);
             av_packet_unref(packet);
         }
     }
@@ -795,8 +771,8 @@ void *decode_video_thread(void *data) {
 
     if (frame == NULL) {
         LOGE("%s unable to allocate an AVFrame!", __func__);
-        ret = JS_ERR_EXTERNAL;
-        goto err;
+        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+        goto end;
     }
 
     while (player->m_is_playing) {
@@ -808,6 +784,7 @@ void *decode_video_thread(void *data) {
         if (avpkt->data == player->m_video_cached_que->m_flush_pkt->data) {
             (player->m_js_media_decoder->*player->m_js_media_decoder->video_decoder_flush)();
             av_packet_free(&avpkt);
+            LOGD("%s video_decoder_flush", __func__);
             continue;
         }
 
@@ -821,8 +798,8 @@ void *decode_video_thread(void *data) {
 
                 if (JS_OK !=
                     (player->m_video_decoded_que->*player->m_video_decoded_que->put)(frame)) {
-                    ret = JS_ERR_EXTERNAL;
-                    goto err;
+                    player->m_js_event_handler->call_on_error(JS_ERR_CACHE_FRAME_FAILED, 0, 0);
+                    goto end;
                 }
 
                 if (ret == JS_OK) {
@@ -830,10 +807,9 @@ void *decode_video_thread(void *data) {
                     break;
                 }
             } else if (ret == JS_ERR_EOF) {
-                av_packet_free(&avpkt);
                 // fixme invoke once.
                 player->m_js_event_handler->call_on_completed();
-                pthread_exit(0);
+                goto end;
             } else if (ret == JS_ERR_TRY_TO_USE_SW_DECODER) {
 
                 //fixme data can't serial.
@@ -847,29 +823,19 @@ void *decode_video_thread(void *data) {
                 av_packet_free(&avpkt);
                 break;
             } else {
-                goto err;
+                player->m_js_event_handler->call_on_error(ret, 0, 0);
+                goto end;
             }
         }
     }
 
-
+    end:
     if (avpkt) {
         av_packet_free(&avpkt);
     }
     if (frame) {
         av_frame_free(&frame);
     }
-
-    pthread_exit(0);
-
-    err:
-    if (avpkt) {
-        av_packet_free(&avpkt);
-    }
-    if (frame) {
-        av_frame_free(&frame);
-    }
-    player->m_js_event_handler->call_on_error(ret, 0, 0);
     pthread_exit(0);
 }
 
@@ -877,15 +843,40 @@ void *decode_audio_thread(void *data) {
 
     pthread_setname_np(pthread_self(), __func__);
     JSPlayer *player = (JSPlayer *) data;
-
+    AVCodecParameters *audio_stream_param = player->m_audio_stream->codecpar;
     JS_RET ret;
     AVPacket *avpkt = NULL;
-    AVFrame *frame = av_frame_alloc();
+    AVFrame *converted_frame = NULL;
+    AVFrame *decoded_frame = av_frame_alloc();
 
-    if (frame == NULL) {
+    if (decoded_frame == NULL) {
         LOGE("%s unable to allocate an AVFrame!", __func__);
-        ret = JS_ERR_EXTERNAL;
-        goto err;
+        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+        goto end;
+    }
+
+    if (audio_stream_param->format != DEFAULT_AV_SAMPLE_FMT) {
+
+        converted_frame = av_frame_alloc();
+        if (converted_frame == NULL) {
+            LOGE("%s unable to allocate an AVFrame!", __func__);
+            player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+            goto end;
+        }
+        ret = player->m_js_media_converter->init_audio_converter(NULL,
+                                                                 audio_stream_param->channel_layout,
+                                                                 audio_stream_param->channels,
+                                                                 DEFAULT_AV_SAMPLE_FMT,
+                                                                 audio_stream_param->sample_rate,
+                                                                 audio_stream_param->channel_layout,
+                                                                 audio_stream_param->channels,
+                                                                 (AVSampleFormat) audio_stream_param->format,
+                                                                 audio_stream_param->sample_rate);
+        if (ret != JS_OK) {
+            LOGE("%s unable to init audio converter!", __func__);
+            player->m_js_event_handler->call_on_error(JS_ERR_CONVERTER_INIT_AUDIO_FAILED, 0, 0);
+            goto end;
+        }
     }
 
     while (player->m_is_playing) {
@@ -897,6 +888,7 @@ void *decode_audio_thread(void *data) {
         if (avpkt->data == player->m_audio_cached_que->m_flush_pkt->data) {
             (player->m_js_media_decoder->*player->m_js_media_decoder->audio_decoder_flush)();
             av_packet_free(&avpkt);
+            LOGD("%s audio_decoder_flush", __func__);
             continue;
         }
 
@@ -904,22 +896,65 @@ void *decode_audio_thread(void *data) {
 
             ret = (player->m_js_media_decoder->*player->
                     m_js_media_decoder->
-                    decode_audio_packet)(avpkt, frame);
+                    decode_audio_packet)(avpkt, decoded_frame);
 
             if (ret >= 0) {
 
-//                // 设置通道数或channel_layout
-//                if (frame->channels > 0 && frame->channel_layout == 0) {
-//                    frame->channel_layout = (uint64_t) av_get_default_channel_layout(
-//                            frame->channels);
-//                } else if (frame->channels == 0 && frame->channel_layout > 0) {
-//                    frame->channels = av_get_channel_layout_nb_channels(frame->channel_layout);
-//                }
+                // 设置通道数或channel_layout
+                if (decoded_frame->channels > 0 && decoded_frame->channel_layout == 0) {
+                    decoded_frame->channel_layout = (uint64_t) av_get_default_channel_layout(
+                            decoded_frame->channels);
+                } else if (decoded_frame->channels == 0 && decoded_frame->channel_layout > 0) {
+                    decoded_frame->channels = av_get_channel_layout_nb_channels(
+                            decoded_frame->channel_layout);
+                }
 
-                if (JS_OK !=
-                    (player->m_audio_decoded_que->*player->m_audio_decoded_que->put)(frame)) {
-                    ret = JS_ERR_EXTERNAL;
-                    goto err;
+                if (converted_frame) {
+
+                    if (av_frame_copy_props(converted_frame, decoded_frame) < 0) {
+                        LOGE("%s unable to av_frame_copy_props!", __func__);
+                        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+                        goto end;
+                    }
+
+                    converted_frame->format = DEFAULT_AV_SAMPLE_FMT;
+                    converted_frame->channels = decoded_frame->channels;
+                    converted_frame->channel_layout = decoded_frame->channel_layout;
+                    converted_frame->nb_samples = decoded_frame->nb_samples;
+
+                    if (av_frame_get_buffer(converted_frame, 0) != 0) {
+                        LOGE("%s unable to av_frame_get_buffer!", __func__);
+                        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0, 0);
+                        goto end;
+                    }
+
+                    converted_frame->linesize[0] = player->m_js_media_converter->convert_simple_format_to_S16(
+                            converted_frame->data[0],
+                            decoded_frame);
+
+                    av_frame_unref(decoded_frame);
+
+                    if (converted_frame->linesize[0] == 0) {
+                        player->m_js_event_handler->call_on_error(
+                                JS_ERR_CONVERTER_AUDIO_CONVERT_FAILED, 0, 0);
+                        goto end;
+                    } else {
+
+                        if (JS_OK !=
+                            (player->m_audio_decoded_que->*player->m_audio_decoded_que->put)(
+                                    converted_frame)) {
+                            player->m_js_event_handler->call_on_error(JS_ERR_CACHE_FRAME_FAILED, 0,
+                                                                      0);
+                            goto end;
+                        }
+                    }
+                } else {
+                    if (JS_OK !=
+                        (player->m_audio_decoded_que->*player->m_audio_decoded_que->put)(
+                                decoded_frame)) {
+                        player->m_js_event_handler->call_on_error(JS_ERR_CACHE_FRAME_FAILED, 0, 0);
+                        goto end;
+                    }
                 }
 
                 if (ret == JS_OK) {
@@ -928,11 +963,9 @@ void *decode_audio_thread(void *data) {
                 }
 
             } else if (ret == JS_ERR_EOF) {
-                av_packet_free(&avpkt);
-
                 // fixme invoke once.
                 player->m_js_event_handler->call_on_completed();
-                pthread_exit(0);
+                goto end;
             } else if (ret == JS_ERR_TRY_TO_USE_SW_DECODER) {
                 //fixme data can't serial.
 
@@ -946,28 +979,25 @@ void *decode_audio_thread(void *data) {
                 av_packet_free(&avpkt);
                 break;
             } else {
-                goto err;
+                player->m_js_event_handler->call_on_error(ret, 0, 0);
+                goto end;
             }
         }
     }
 
+    end:
     if (avpkt) {
         av_packet_free(&avpkt);
     }
-    if (frame) {
-        av_frame_free(&frame);
+    if (decoded_frame) {
+        av_frame_free(&decoded_frame);
     }
-
-    pthread_exit(0);
-
-    err:
-    if (avpkt) {
-        av_packet_free(&avpkt);
+    if (converted_frame) {
+        av_frame_free(&converted_frame);
     }
-    if (frame) {
-        av_frame_free(&frame);
+    if (player->m_js_media_converter->is_audio_converter_initialized()) {
+        player->m_js_media_converter->release_audio_converter();
     }
-    player->m_js_event_handler->call_on_error(ret, 0, 0);
     pthread_exit(0);
 }
 
@@ -980,7 +1010,7 @@ int io_interrupt_cb(void *data) {
     JSPlayer *player = (JSPlayer *) data;
 
     if (av_gettime() - player->m_timing > player->m_io_time_out) {
-        LOGD("io timeout.");
+        LOGD("%s io timeout.", __func__);
         return 1;
     } else {
         return 0;
@@ -990,10 +1020,9 @@ int io_interrupt_cb(void *data) {
 
 void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) {
     JSPlayer *player = (JSPlayer *) data;
-    unsigned int audio_size;
-    AVFrame *frame;
-    JSEventHandler *js_event_handler = player->m_js_event_handler;
+    AVFrame *frame = NULL;
     JSAudioPlayer *audio_player = player->m_audio_player;
+    int64_t audio_position = 0;
 
     if (!player->m_is_playing) {
         goto end;
@@ -1003,28 +1032,50 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
         goto end;
     }
 
-    if (frame->format == DEFAULT_AV_SAMPLE_FMT) {
-        audio_player->enqueue(frame->data[0], (unsigned int) frame->linesize[0]);
-        av_frame_free(&frame);
-    } else {
-        audio_size = player->m_js_media_converter->convert_simple_format_to_S16(
-                player->m_convert_audio_buffer,
-                frame);
-        av_frame_free(&frame);
-        if (audio_size == 0) {
-            js_event_handler->call_on_error(JS_ERR_PLAY_AUDIO_FAILED, 0, 0);
-            goto end;
-        } else {
-            audio_player->enqueue(player->m_convert_audio_buffer, audio_size);
-        }
-    }
+    audio_player->enqueue_buffer(frame->data[0], (unsigned int) frame->linesize[0]);
+//
+//    player->m_cur_audio_start_pts = (int64_t) (frame->pts *
+//                                               av_q2d(player->m_audio_stream->time_base) *
+//                                               1000000) -
+//                                    (int64_t) ((double) frame->nb_samples /
+//                                               frame->sample_rate *
+//                                               1000000);
+//
+//
+////
+////    LOGD("%s time_base.num=%d,time_base.den=%d", __func__, player->m_audio_stream->time_base.num,
+////         player->m_audio_stream->time_base.den);
+//
+//    audio_position = audio_player->get_position();
+//
+//    if (audio_position < 0) {
+//        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0,
+//                                                  0);
+//        av_frame_free(&frame);
+//        goto end;
+//    }
+//
+//    player->m_cur_audio_position = audio_position;
+//
+//    LOGD("%s pts =%lld,player->m_cur_audio_start_pts=%lld,player->m_cur_audio_position=%lld",
+//         __func__, frame->pts,
+//         player->m_cur_audio_start_pts, player->m_cur_audio_position);
 
+    av_frame_free(&frame);
     return;
 
     end:
     player->m_is_audio_data_consuming = false;
 }
 
+/**
+ * 1. 无法察觉：音频和视频的时间戳差值在：-100ms ~ +25ms 之间
+
+2. 能够察觉：音频滞后了 100ms 以上，或者超前了 25ms 以上
+
+3. 无法接受：音频滞后了 185ms 以上，或者超前了 90ms 以上
+
+ */
 
 void egl_buffer_queue_cb(void *data) {
 
@@ -1032,12 +1083,57 @@ void egl_buffer_queue_cb(void *data) {
     if (!player->m_is_playing) {
         return;
     }
+//
+//    if (player->m_cur_audio_position == -1) {
+//        usleep(10000);
+//        return;
+//    }
+
     AVFrame *frame = player->m_video_decoded_que->get();
     if (frame == NULL) {
         return;
     }
+//
+//    player->m_cur_video_pts = (int64_t) (frame->pts * av_q2d(player->m_video_stream->time_base) *
+//                                         1000000);
+//
+//    while (player->m_is_playing) {
+//
+//        int64_t audio_position = player->m_audio_player->get_position();
+//        if (audio_position < 0) {
+//            player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0,
+//                                                      0);
+//            av_frame_free(&frame);
+//            return;
+//        }
+//
+//        player->m_cur_audio_pts =
+//                audio_position - player->m_cur_audio_position + player->m_cur_audio_start_pts;
+//
+//        int64_t delay_time = player->m_cur_video_pts - player->m_cur_audio_pts;
+//
+//        if (delay_time < 0) {
+//            //video is slow than audio.
+//            if (llabs(delay_time) < 100000) {
+//                break;
+//            } else {
+//                LOGD("%s drop video frame delay_time=%lld", __func__, delay_time);
+//                av_frame_free(&frame);
+//                return;
+//            }
+//        } else {
+//            //audio is slow than video.
+//            if (delay_time < 25000) {
+//                break;
+//            } else {
+//                //sleep
+//                usleep(delay_time);
+//                LOGD("%s delay_time=%lld", __func__, delay_time);
+//                continue;
+//            }
+//        }
+//    }
 
-//    usleep(40000);//todo sync video audio.
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
 }
@@ -1045,30 +1141,30 @@ void egl_buffer_queue_cb(void *data) {
 
 void audio_cached_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
-    LOGD("*drop* drop audio frame (clear all)");
+    LOGD("%s *drop* drop audio frame (clear all)", __func__);
 }
 
 void video_cached_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
-    LOGD("*drop* drop video frame (clear all)");
+    LOGD("%s *drop* drop video frame (clear all)", __func__);
 }
 
 void audio_decoded_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
-    LOGD("*drop* drop audio frame (clear all)");
+    LOGD("%s *drop* drop audio frame (clear all)", __func__);
 }
 
 void video_decoded_que_clear_callback(void *data) {
     JSPlayer *player = (JSPlayer *) data;
-    LOGD("*drop* drop video packet (clear all)");
+    LOGD("%s *drop* drop video packet (clear all)", __func__);
 }
 
 void audio_cached_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
     if (is_buffering) {
-        LOGD("start buffering audio packet.");
+        LOGD("%s start buffering audio packet.", __func__);
     } else {
-        LOGD("stop buffering audio packet.");
+        LOGD("%s stop buffering audio packet.", __func__);
     }
 
     player->m_js_event_handler->call_on_buffering(is_buffering);
@@ -1077,9 +1173,9 @@ void audio_cached_que_buffering_callback(void *data, bool is_buffering) {
 void video_cached_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
     if (is_buffering) {
-        LOGD("start buffering video packet.");
+        LOGD("%s start buffering video packet.", __func__);
     } else {
-        LOGD("stop buffering video packet.");
+        LOGD("%s stop buffering video packet.", __func__);
     }
     player->m_js_event_handler->call_on_buffering(is_buffering);
 }
@@ -1088,9 +1184,9 @@ void video_cached_que_buffering_callback(void *data, bool is_buffering) {
 void audio_decoded_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
     if (is_buffering) {
-        LOGD("start buffering audio frame.");
+        LOGD("%s start buffering audio frame.", __func__);
     } else {
-        LOGD("stop buffering audio frame.");
+        LOGD("%s stop buffering audio frame.", __func__);
     }
     player->m_js_event_handler->call_on_buffering(is_buffering);
 }
@@ -1098,33 +1194,25 @@ void audio_decoded_que_buffering_callback(void *data, bool is_buffering) {
 void video_decoded_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
     if (is_buffering) {
-        LOGD("start buffering video frame.");
+        LOGD("%s start buffering video frame.", __func__);
     } else {
-        LOGD("stop buffering video frame.");
+        LOGD("%s stop buffering video frame.", __func__);
     }
     player->m_js_event_handler->call_on_buffering(is_buffering);
 }
 
+
 void consume_audio_data_by_interceptor(JSPlayer *player) {
 
-    unsigned int audio_size;
-    AVFrame *frame;
+    AVFrame *frame = NULL;
     JSEventHandler *js_event_handler = player->m_js_event_handler;
 
-    if (!player->m_is_playing) {
-        goto end;
-    }
+    while (player->m_is_playing) {
 
-    frame = player->m_audio_decoded_que->get();
-    if (frame == NULL) {
-        goto end;
-    }
-
-
-    if (frame->format == DEFAULT_AV_SAMPLE_FMT) {//todo func pointer
-        js_event_handler->call_on_intercepted_pcm_data(frame->data[0],
-                                                       frame->linesize[0],
-                                                       frame->channels);
+        frame = player->m_audio_decoded_que->get();
+        if (frame == NULL) {
+            break;
+        }
 
         if (player->m_mute) {
 
@@ -1134,61 +1222,26 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
 
         } else {
             if (player->m_left_channel_mute) {
-                for (int i = 0; i < frame->linesize[0] / 2; i += 2) {
+                for (int i = 0;
+                     i < frame->linesize[0] / DST_BYTES_PER_SAMPLE; i += DST_BYTES_PER_SAMPLE) {
                     ((short *) frame->data[0])[i] = 0;
                 }
             }
             if (player->m_right_channel_mute) {
-                for (int i = 1; i < frame->linesize[0] / 2; i += 2) {
+                for (int i = 1;
+                     i < frame->linesize[0] / DST_BYTES_PER_SAMPLE; i += DST_BYTES_PER_SAMPLE) {
                     ((short *) frame->data[0])[i] = 0;
                 }
             }
         }
 
+        js_event_handler->call_on_intercepted_pcm_data((short *) frame->data[0],
+                                                       (size_t) frame->linesize[0],
+                                                       frame->channels);
+
         av_frame_free(&frame);
-        consume_audio_data_by_interceptor(player);
-    } else {
-        audio_size = player->m_js_media_converter->convert_simple_format_to_S16(
-                player->m_convert_audio_buffer,
-                frame);
-
-        if (audio_size == 0) {
-            js_event_handler->call_on_error(JS_ERR_INTERCEPT_AUDIO_FAILED, 0, 0);
-            av_frame_free(&frame);
-            goto end;
-        } else {
-
-            if (player->m_mute) {
-
-                for (int i = 0; i < audio_size; i++) {
-                    player->m_convert_audio_buffer[i] = 0;
-                }
-
-            } else {
-                if (player->m_left_channel_mute) {
-                    for (int i = 0; i < audio_size / 2; i += 2) {
-                        ((short *) player->m_convert_audio_buffer)[i] = 0;
-
-                    }
-                }
-                if (player->m_right_channel_mute) {
-                    for (int i = 1; i < audio_size / 2; i += 2) {
-                        ((short *) player->m_convert_audio_buffer)[i] = 0;
-                    }
-                }
-            }
-
-            js_event_handler->call_on_intercepted_pcm_data(
-                    player->m_convert_audio_buffer, audio_size,
-                    frame->channels);
-            av_frame_free(&frame);
-            consume_audio_data_by_interceptor(player);
-        }
     }
 
-    return;
-
-    end:
     player->m_is_audio_data_consuming = false;
 }
 
@@ -1198,7 +1251,7 @@ void consume_audio_data_by_audiotrack(JSPlayer *player) {
 
 
 void consume_audio_data_by_opensles(JSPlayer *player) {
-    opensles_buffer_queue_cb(player->m_audio_player->m_bq_player_buffer_queue, player);
+    opensles_buffer_queue_cb(player->m_audio_player->m_player_buffer_queue_itf, player);
 }
 
 
@@ -1207,13 +1260,13 @@ bool is_live(AVFormatContext *s) {
         || !strcmp(s->iformat->name, "rtsp")
         || !strcmp(s->iformat->name, "sdp")
         || !strcmp(s->iformat->name, "flv")) {
-        LOGD("s->iformat->name=%s", s->iformat->name);
+        LOGD("%s s->iformat->name=%s", __func__, s->iformat->name);
         return true;
     }
 
     if (s->pb && (!strncmp(s->filename, "rtp:", 4)
                   || !strncmp(s->filename, "udp:", 4))) {
-        LOGD("s->filename=%s", s->filename);
+        LOGD("%s s->filename=%s", __func__, s->filename);
         return true;
     }
     return false;

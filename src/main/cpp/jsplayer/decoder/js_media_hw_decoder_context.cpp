@@ -91,17 +91,17 @@ JS_RET JSMediaDecoderContext::update_media_decoder_context() {
 
     //todo how to set align value.
     if (av_frame_get_buffer(frame_buf, 0) != 0) {
-        LOGE("%s  av_frame_get_buffer failed", __func__);
+        LOGE("%s av_frame_get_buffer failed", __func__);
         return JS_ERR;
     }
 
     ret = update_pix_fmt();
     if (ret != JS_OK) {
-        LOGE("output color format 0x%x (value=%d) is not supported",
+        LOGE("%s output color format 0x%x (value=%d) is not supported", __func__,
              color_format, color_format);
         return JS_ERR;
     } else {
-        LOGD("output color format is 0x%x (value=%d) pix_fmt=%d yuv_fourcc=%d",
+        LOGD("%s output color format is 0x%x (value=%d) pix_fmt=%d yuv_fourcc=%d", __func__,
              color_format,
              color_format,
              pix_fmt, yuv_fourcc);
@@ -109,7 +109,7 @@ JS_RET JSMediaDecoderContext::update_media_decoder_context() {
 
     str_format = js_MediaFormat_toString(format);
     if (str_format) {
-        LOGD("output MediaFormat changed to %s", str_format);
+        LOGD("%s output MediaFormat changed to %s", __func__, str_format);
         av_freep(&str_format);
     }
 

@@ -5,7 +5,6 @@
 #include <SLES/OpenSLES.h>
 #include <SLES/OpenSLES_Android.h>
 
-#define MAX_AUDIO_FRAME_SIZE        192000
 
 class JSAudioPlayer {
 
@@ -14,11 +13,13 @@ public :
 
     ~JSAudioPlayer();
 
-    JS_RET create_engine();
+    JS_RET create_audio_player_engine();
 
-    JS_RET create_AudioPlayer(int rate, int channel, int bit_per_sample, void *data);
+    JS_RET create_audio_player(int rate, int channel, int bit_per_sample, void *data);
 
-    JS_RET enqueue(const void *buffer, unsigned int size);
+    JS_RET enqueue_buffer(const void *buffer, unsigned int size);
+
+    int64_t get_position();
 
     JS_RET clear();
 
@@ -32,22 +33,21 @@ public :
 
     void reset();
 
-
     // engine interfaces
-    SLObjectItf m_engine_object = NULL;
-    SLEngineItf m_engine_engine = NULL;
+    SLObjectItf m_player_engine_object_itf = NULL;
+    SLEngineItf m_player_engine_itf = NULL;
 
-    // buffer m_dequeue player interfaces
-    SLObjectItf m_bq_player_object = NULL;
-    SLPlayItf m_bq_player_play = NULL;
-    SLAndroidSimpleBufferQueueItf m_bq_player_buffer_queue = NULL;
-    SLMuteSoloItf m_bq_player_mute_solo = NULL;;
-    SLEffectSendItf m_bq_player_effect_send = NULL;
-    SLVolumeItf m_bq_player_volume = NULL;
+    // player interfaces
+    SLObjectItf m_player_object_itf = NULL;
+    SLPlayItf m_player_itf = NULL;
+    SLAndroidSimpleBufferQueueItf m_player_buffer_queue_itf = NULL;
+    SLMuteSoloItf m_player_mute_solo_itf = NULL;;
+    SLEffectSendItf m_player_effect_send_itf = NULL;
+    SLVolumeItf m_player_volume_itf = NULL;
 
     // output mix interfaces
-    SLObjectItf m_output_mix_object = NULL;
-    SLEnvironmentalReverbItf m_output_mix_environmental_reverb = NULL;
+    SLObjectItf m_output_mix_object_itf = NULL;
+    SLEnvironmentalReverbItf m_output_mix_environmental_reverb_itf = NULL;
 
     slAndroidSimpleBufferQueueCallback sl_android_simple_buffer_queue_callback = NULL;
 
@@ -65,7 +65,6 @@ public :
     int m_bits_per_sample = 0;
 
     bool m_is_created_audio_player = false;
-
 
 };
 

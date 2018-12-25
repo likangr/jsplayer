@@ -275,7 +275,7 @@ int js_jni_exception_check(JNIEnv *env, int log, void *log_ctx) {
 
     (*env)->DeleteLocalRef(env, exception);
 
-    LOGW("message %s", message);
+    LOGW("%s message %s", __func__, message);
     av_free(message);
 
     return -1;
