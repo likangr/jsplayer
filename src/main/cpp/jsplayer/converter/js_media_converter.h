@@ -47,7 +47,7 @@ public:
 
     bool is_audio_converter_initialized();
 
-    size_t convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFrame *frame);
+    int convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFrame *frame);
 };
 
 

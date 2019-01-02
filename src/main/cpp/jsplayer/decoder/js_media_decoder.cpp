@@ -8,14 +8,15 @@
 #include "js_constant.h"
 
 extern "C" {
+#include "libavutil/time.h"
 #include "js_ndk_mediacodec_proxy.h"
 #include "js_java_mediacodec_wrapper.h"
 #include "util/js_log.h"
 #include "util/js_jni.h"
 }
 
-#define INPUT_DEQUEUE_TIMEOUT_US            8000
-#define OUTPUT_DEQUEUE_TIMEOUT_US           8000
+#define INPUT_DEQUEUE_TIMEOUT_US            20000
+#define OUTPUT_DEQUEUE_TIMEOUT_US           0
 
 JSMediaDecoder::JSMediaDecoder(JSEventHandler *js_eventHandler) {
     m_js_event_handler = js_eventHandler;
@@ -312,12 +313,15 @@ JS_RET JSMediaDecoder::mediacodecdec_receive_frame(AVFrame *frame) {
     index = (int) js_MediaCodec_dequeueOutputBuffer(m_video_hw_dec, &info,
                                                     OUTPUT_DEQUEUE_TIMEOUT_US);
 
-    LOGD("%s dequeueOutputBuffer index=%d,info.size=%d,info.flags=%d,info.presentationTimeUs=%lld,info.offset=%d",
-         __func__,
-         index, info.size, info.flags, info.presentationTimeUs,
-         info.offset);
+    LOGD("%s dequeueOutputBuffer index=%d", __func__, index);
 
     if (index >= 0) {
+
+        LOGD("%s info.size=%d,info.flags=%d,info.presentationTimeUs=%lld,info.offset=%d",
+             __func__,
+             info.size, info.flags,
+             info.presentationTimeUs,
+             info.offset);
 
         if (info.size) {
 
@@ -385,7 +389,7 @@ JS_RET JSMediaDecoder::mediacodecdec_receive_frame(AVFrame *frame) {
 
         return JS_ERR_TRY_AGAIN;
     } else if (js_MediaCodec_getInfoTryAgainLater((JSMediaCodec *) m_video_hw_dec) == index) {
-        LOGD("%s js_MediaCodec_getInfoTryAgainLater", __func__);
+        LOGD("%s js_MediaCodec_infoTryAgainLater", __func__);
 
         return JS_ERR_TRY_AGAIN;
     } else {
@@ -418,10 +422,10 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
             LOGE("%s failed to get input buffer", __func__);
             return JS_ERR_EXTERNAL;
         }
-
-        LOGD("%s buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", __func__, buffer_size,
-             avpkt->size,
-             buffer_size > avpkt->size);
+//
+//        LOGD("%s buffer_size=%d,avpkt->size=%d,buffer_size>avpkt->size=%d", __func__, buffer_size,
+//             avpkt->size,
+//             buffer_size > avpkt->size);
 
         int64_t pts;
         if (need_draining) {
@@ -434,25 +438,23 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
 //            }
             pts = avpkt->pts;
 
-            LOGD("%s send End Of Stream signal", __func__);
+            LOGD("%s send end of stream signal", __func__);
 
         } else {
 
-            /**
-            int bufferFlagKeyFrame = MediaCodec.BUFFER_FLAG_KEY_FRAME; api21 fixme
-             */
-            if (avpkt->flags & AV_PKT_FLAG_KEY) {
-                flags |= js_MediaCodec_getBufferFlagKeyFrame((JSMediaCodec *) m_video_hw_dec);
-            }
+//            /**
+//            int bufferFlagKeyFrame = MediaCodec.BUFFER_FLAG_KEY_FRAME; api21 fixme is need add this code?
+//             */
+//            if (avpkt->flags & AV_PKT_FLAG_KEY) {
+//                flags |= js_MediaCodec_getBufferFlagKeyFrame((JSMediaCodec *) m_video_hw_dec);
+//            }
 
             pts = avpkt->pts;
 
-            //AVPacket: presentationTimeUs calculate.  such as m_video_stream->time_base=1/1000  AV_TIME_BASE_Q=1/10000000
             if (m_video_stream->time_base.num && m_video_stream->time_base.den) {
                 pts = av_rescale_q(pts, m_video_stream->time_base,
                                    AV_TIME_BASE_Q);
             }
-
 
             //fixme more codec type.
             H264ConvertState convert_state = {0};
@@ -462,13 +464,11 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
             memcpy(buffer, avpkt->data, (size_t) avpkt->size);
         }
 
-        LOGD("%s js_MediaCodec_queueInputBuffer pts=%"
-                     PRId64, __func__,
-             pts);
+        LOGD("%s js_MediaCodec_queueInputBuffer pts=%lld", __func__, pts);
 
         ret = js_MediaCodec_queueInputBuffer(m_video_hw_dec, (size_t) index, 0,
                                              (size_t) avpkt->size,
-                                             (uint64_t) pts, flags);
+                                             (uint64_t) pts, (uint32_t) flags);
 
         if (ret < 0) {
             LOGD("%s failed to queue input buffer (status = %d)", __func__, ret);
@@ -489,7 +489,7 @@ JS_RET JSMediaDecoder::mediacodecdec_send_packet(AVPacket *avpkt) {
 void JSMediaDecoder::set_decoder_type(const char *decoder_type) {
     m_decoder_type = (char *) malloc(strlen(decoder_type));
     sprintf(m_decoder_type, "%s", decoder_type);
-    LOGD("%s m_decoder_type=%s", __func__,m_decoder_type);
+    LOGD("%s m_decoder_type=%s", __func__, m_decoder_type);
 
     if (!strcmp(decoder_type, JS_OPTION_DECODER_TYPE_HW) ||
         !strcmp(decoder_type, JS_OPTION_DECODER_TYPE_AUTO)) {
@@ -566,6 +566,7 @@ JS_RET JSMediaDecoder::decode_video_packet_with_hw(AVPacket *avpkt,
         if (ret == JS_OK) {
             is_send_packet = true;
         } else if (ret == JS_ERR_TRY_AGAIN) {
+            av_usleep(8000);//fixme how to determine sleep time.
             return JS_ERR_NEED_SEND_THIS_PACKET_AGAIN;
         } else {
             LOGW("%s mediacodecdec_send_packet failed,result=%d", __func__, ret);
@@ -632,11 +633,15 @@ JSMediaDecoder::decode_packet_with_sw_internal(AVCodecContext *avctx,
         }
 
         ret = avcodec_send_packet(avctx, avpkt);
-        if (ret != 0) {
+        if (ret == 0) {
+            is_send_packet = true;
+        } else if (ret == AVERROR(EAGAIN)) {
+            av_usleep(8000);//fixme how to determine sleep time.
+            return JS_ERR_NEED_SEND_THIS_PACKET_AGAIN;
+        } else {
             LOGE("%s avcodec_send_packet failed,result=%d", __func__, ret);
             return JS_ERR_SW_DECODER_UNAVAILABLE;
         }
-        is_send_packet = true;
     }
 }
 

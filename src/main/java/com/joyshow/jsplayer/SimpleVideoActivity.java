@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 
 import com.joyshow.jsplayer.player.JSPlayer;
 import com.joyshow.jsplayer.utils.Logger;
@@ -30,6 +31,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     private Button mBtnMute;
     private Button mBtnPause;
     private Button mBtnStop;
+    private ProgressBar mProgressBar;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,17 +58,17 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl("rtmp://pull-g.kktv8.com/livekktv/100987038");
 //        mPlayer.setUrl("rtmp://v1.one-tv.com/live/mpegts.stream");
 
-        mPlayer.setUrl("http://221.228.226.23/11/t/j/v/b/tjvbwspwhqdmgouolposcsfafpedmb/sh.yinyuetai.com/691201536EE4912BF7E4F1E2C67B8119.mp4");
+//        mPlayer.setUrl("http://221.228.226.23/11/t/j/v/b/tjvbwspwhqdmgouolposcsfafpedmb/sh.yinyuetai.com/691201536EE4912BF7E4F1E2C67B8119.mp4");
 //        mPlayer.setUrl("http://hc.yinyuetai.com/uploads/videos/common/CE3C0166CE5EB6D5FA9FDB182D51DFA9.mp4");
 //        mPlayer.setUrl("http://v.ysbang.cn//data/video/2015/rkb/2015rkb01.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "cyby1.mp4");
+        mPlayer.setUrl(SDCARD_PATH + File.separator + "cyby1.mp4");
 
 
         mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
+//        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_SW);
         mPlayer.prepare();
 
         mPlayer.setOnPreparedListener(this);
@@ -78,6 +80,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         mBtnMute = (Button) findViewById(R.id.btn_mute);
         mBtnPause = (Button) findViewById(R.id.btn_pause);
         mBtnStop = (Button) findViewById(R.id.btn_stop);
+        mProgressBar = (ProgressBar) findViewById(R.id.progress_bar);
         mBtnMute.setOnClickListener(this);
         mBtnPause.setOnClickListener(this);
         mBtnStop.setOnClickListener(this);
@@ -156,6 +159,6 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     @Override
     public void onBuffering(JSPlayer player, boolean isBuffering) {
         Logger.d(TAG, "onBuffering isBuffering=" + isBuffering);
-
+        mProgressBar.setVisibility(isBuffering ? View.VISIBLE : View.GONE);
     }
 }

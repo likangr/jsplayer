@@ -14,7 +14,7 @@ public:
     ~JSEventHandler();
 
 
-    void call_on_intercepted_pcm_data(short *pcm_data, size_t pcm_data_size, int channel_num);
+    void call_on_intercepted_pcm_data(short *pcm_data, int pcm_data_size, int channel_num);
 
     void
     call_on_parse_data_from_video_packet(uint8_t *video_packet_data, int video_packet_data_size);

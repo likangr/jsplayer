@@ -307,7 +307,7 @@ void JS_JNI_CALL
 set_native_intercepted_pcm_data_callback_handle(JNIEnv *env, jobject obj, jlong handle,
                                                 jlong callback_handle) {
     JSPlayer *player = (JSPlayer *) handle;
-    player->native_intercepted_pcm_data_callback = (void (*)(int64_t, short *, size_t ,
+    player->native_intercepted_pcm_data_callback = (void (*)(int64_t, short *, int,
                                                              int)) (callback_handle);
 }
 

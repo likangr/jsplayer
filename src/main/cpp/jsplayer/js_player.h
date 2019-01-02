@@ -8,24 +8,19 @@
 #include "util/js_queue.h"
 #include "js_constant.h"
 
-enum {
-    AV_SYNC_EXTERNAL_CLOCK,
-    AV_SYNC_AUDIO_MASTER
-};
-
 class JSPlayer;
 
 typedef JS_RET (JSPlayer::*CACHE_PACKET_FUNC)(AVPacket *avpkt);
 
 class JSPlayer {
 
+public:
+
 /***
  * ********************************
  * funcs
  * ********************************
  */
-public:
-
     JSPlayer(jobject java_js_player);
 
     ~JSPlayer();
@@ -83,8 +78,8 @@ public:
 
     void on_surface_hold_state_changed();
 
-
     CACHE_PACKET_FUNC cache_audio_packet;
+
     CACHE_PACKET_FUNC cache_video_packet;
 
     /*cache video packet way*/
@@ -176,7 +171,7 @@ public:
 
     void (*native_intercepted_pcm_data_callback)(int64_t native_js_player,
                                                  short *pcm_data,
-                                                 size_t pcm_data_size,
+                                                 int pcm_data_size,
                                                  int channel_num);
 
     void (*native_parse_data_from_video_packet_callback)(int64_t native_js_player,
@@ -184,12 +179,15 @@ public:
                                                          int video_packet_data_size);
 
     /*sync audio and video control field*/
-    int m_av_sync_type = AV_SYNC_AUDIO_MASTER;
-
-    int64_t m_cur_video_pts = -1;
-    int64_t m_cur_audio_start_pts = -1;
-    int64_t m_cur_audio_pts = -1;
-    int64_t m_cur_audio_position = -1;
+//    int m_av_sync_type = AV_SYNC_AUDIO_MASTER;
+//    int64_t m_frame_rate_duration = -1;
+//    double m_frame_rate = -1.0;
+//    int64_t m_cur_video_pts = -1;
+//    int64_t m_cur_audio_start_pts = -1;
+//    int64_t m_cur_audio_pts = -1;
+//    int64_t m_cur_audio_position = -1;
+//    int64_t m_audio_buffer_duration = -1;
+//    int64_t m_last_video_pts = -1;
 };
 
 /***

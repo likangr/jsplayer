@@ -73,7 +73,7 @@ void JSMediaCoverter::release_audio_converter() {
 }
 
 
-size_t
+int
 JSMediaCoverter::convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFrame *frame) {
     //计算目标样本数  转换前后的样本数不一样  抓住一点 采样时间相等
     //src_nb_samples/src_rate=dst_nb_samples/dst_rate
@@ -97,7 +97,7 @@ JSMediaCoverter::convert_simple_format_to_S16(uint8_t *converted_pcm_data, AVFra
         return 0;
     }
 
-    size_t data_size = (size_t)m_out_channel * out_nb_samples * m_out_bytes_per_sample;
+    int data_size = m_out_channel * out_nb_samples * m_out_bytes_per_sample;
 
 //    LOGD("%s out_nb_samples=%d,data_size=%d", __func__,
 //         out_nb_samples, data_size);
@@ -126,18 +126,12 @@ JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
     frame->key_frame = (info->flags &
                         js_MediaCodec_getBufferFlagKeyFrame(video_hw_dec)) ? 1
                                                                            : 0;
-    LOGD("%s frame->key_frame=%d", __func__, frame->key_frame);
-
     if (av_stream->time_base.num && av_stream->time_base.den) {
         frame->pts = av_rescale_q(info->presentationTimeUs, AV_TIME_BASE_Q,
                                   av_stream->time_base);
     } else {
         frame->pts = info->presentationTimeUs;
     }
-
-    LOGD("%s js_MediaCodec_getOutputBuffer pts=%"
-                 PRId64, __func__, frame->pts);
-
 
     //todo add judge if already is i420.
     ret = ConvertToI420(data, size,

@@ -17,7 +17,7 @@ JSEventHandler::~JSEventHandler() {
 }
 
 
-void JSEventHandler::call_on_intercepted_pcm_data(short *pcm_data, size_t pcm_data_size,
+void JSEventHandler::call_on_intercepted_pcm_data(short *pcm_data, int pcm_data_size,
                                                   int channel_num) {//fixme func pointer.
 
 //    LOGD("%s pcm_data_size=%ld,channel_num=%d", __func__, pcm_data_size, channel_num);
@@ -26,7 +26,7 @@ void JSEventHandler::call_on_intercepted_pcm_data(short *pcm_data, size_t pcm_da
                                                           pcm_data, pcm_data_size,
                                                           channel_num);
     } else {
-        size_t sample_num = pcm_data_size / DST_BYTES_PER_SAMPLE;
+        int sample_num = pcm_data_size / DST_BYTES_PER_SAMPLE;
         JNIEnv *env = js_jni_get_env(NULL);
         jshortArray jpcm_data = env->NewShortArray((jsize) sample_num);
         env->SetShortArrayRegion(jpcm_data, 0, (jsize) sample_num, pcm_data);
