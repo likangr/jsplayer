@@ -64,7 +64,7 @@ void printf_log(int prio, const char *fmt, ...) {
     pthread_mutex_lock(log_mutex);
     FILE *fp = fopen(log_file_save_path, "at");
     if (!fp) {
-        return;
+        goto end;
     }
 
     time_t now_time;
@@ -74,5 +74,7 @@ void printf_log(int prio, const char *fmt, ...) {
     strftime(log_time, LOG_TIME_SIZE, "[%Y-%m-%d %H:%M:%S]", local_time);
     fprintf(fp, "%s LogPriority=%d %s %s\r\n", log_time, prio, LOG_TAG, log_buf);
     fclose(fp);
+
+    end:
     pthread_mutex_unlock(log_mutex);
 }

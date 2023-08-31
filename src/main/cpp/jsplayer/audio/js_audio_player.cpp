@@ -4,14 +4,6 @@ extern "C" {
 #include "util/js_log.h"
 }
 
-/**
- *
-（1）C 语言接口，兼容 C++，需要在 NDK 下开发，能更好地集成在 native 应用中
-（2）运行于 native 层，需要自己管理资源的申请与释放，没有 Dalvik 虚拟机的垃圾回收机制
-（3）支持 PCM 数据的采集，支持的配置：16bit 位宽，16000 Hz采样率，单通道。（其他的配置不能保证兼容所有平台）
-（4）支持 PCM 数据的播放，支持的配置：8bit/16bit 位宽，单通道/双通道，小端模式，采样率（8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000 Hz）
-（5）支持播放的音频数据来源：res 文件夹下的音频、assets 文件夹下的音频、sdcard 目录下的音频、在线网络音频、代码中定义的音频二进制数据等等
- */
 
 JSAudioPlayer::JSAudioPlayer() {
 
@@ -115,7 +107,7 @@ JS_RET JSAudioPlayer::create_audio_player(int rate, int channel, int bit_per_sam
 
 
     // configure audio source
-    SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 1};
+    SLDataLocator_AndroidSimpleBufferQueue loc_bufq = {SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, 2};
     SLDataSource audioSrc = {&loc_bufq, &format_pcm};
 
     // configure audio sink

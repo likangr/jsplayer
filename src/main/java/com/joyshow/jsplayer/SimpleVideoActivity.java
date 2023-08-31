@@ -1,5 +1,6 @@
 package com.joyshow.jsplayer;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Environment;
@@ -17,9 +18,9 @@ import java.io.File;
  * simple video.
  */
 public class SimpleVideoActivity extends Activity implements View.OnClickListener, JSPlayer.OnErrorListener, JSPlayer.OnPreparedListener, JSPlayer.OnInfoListener, JSPlayer.OnCompletedListener, JSPlayer.OnBufferingListener {
-    private String TAG = "SimpleVideoActivity";
+    private final String TAG = "SimpleVideoActivity";
 
-    private static String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
+    private static final String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
 
     static {
         JSPlayer.setLoggable(true);
@@ -64,11 +65,11 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
-        mPlayer.setUrl(SDCARD_PATH + File.separator + "cyby1.mp4");
+        mPlayer.setUrl(SDCARD_PATH + File.separator + "2.mp4");
 
 
-        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
-//        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_SW);
+//        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
+        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_SW);
         mPlayer.prepare();
 
         mPlayer.setOnPreparedListener(this);
@@ -93,6 +94,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         mPlayer.destroy();
     }
 
+    @SuppressLint("SetTextI18n")
     @Override
     public void onClick(View v) {
         if (v == mBtnMute) {

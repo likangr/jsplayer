@@ -180,14 +180,12 @@ public:
 
     /*sync audio and video control field*/
 //    int m_av_sync_type = AV_SYNC_AUDIO_MASTER;
-//    int64_t m_frame_rate_duration = -1;
-//    double m_frame_rate = -1.0;
-//    int64_t m_cur_video_pts = -1;
-//    int64_t m_cur_audio_start_pts = -1;
-//    int64_t m_cur_audio_pts = -1;
-//    int64_t m_cur_audio_position = -1;
-//    int64_t m_audio_buffer_duration = -1;
-//    int64_t m_last_video_pts = -1;
+    int64_t m_frame_rate_duration = -1;
+    double m_frame_rate = -1.0;
+    int64_t m_cur_video_pts = -1;
+    int64_t m_cur_audio_pts = -1;
+    int64_t m_last_video_pts = -1;
+    int64_t m_first_video_pts = -1;
 };
 
 /***

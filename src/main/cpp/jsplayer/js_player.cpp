@@ -340,21 +340,20 @@ JS_RET JSPlayer::prepare_video() {
         cache_video_packet = &JSPlayer::cache_record_video_packet;
     }
 
-//    AVRational frame_rate = av_guess_frame_rate(m_format_ctx, m_video_stream, NULL);
-//    if (frame_rate.den && frame_rate.num) {
-//
-//        m_frame_rate_duration =
-//                (int64_t) (av_q2d((AVRational) {frame_rate.den, frame_rate.num}) * 1000000);
-//
-//        m_frame_rate = av_q2d(frame_rate);
-//    }
-//
-//    LOGD("%s frame_rate.den=%d,frame_rate.num=%d,m_frame_rate=%f,m_frame_rate_duration=%lld",
-//         __func__,
-//         frame_rate.den,
-//         frame_rate.num,
-//         m_frame_rate,
-//         m_frame_rate_duration);
+    //===sync
+    AVRational frame_rate = av_guess_frame_rate(m_format_ctx, m_video_stream, NULL);
+    if (frame_rate.den && frame_rate.num) {
+        m_frame_rate_duration =
+                (int64_t) (av_q2d((AVRational) {frame_rate.den, frame_rate.num}) * 1000000);
+        m_frame_rate = av_q2d(frame_rate);
+    }
+    LOGD("%s frame_rate.den=%d,frame_rate.num=%d,m_frame_rate=%f,m_frame_rate_duration=%lld",
+         __func__,
+         frame_rate.den,
+         frame_rate.num,
+         m_frame_rate,
+         m_frame_rate_duration);
+    //===sync
 
     LOGD("%s prepare_video finish.", __func__);
     return JS_OK;
@@ -481,14 +480,12 @@ void JSPlayer::free_res() {
     m_min_decoded_duration = -1;
     m_max_decoded_duration = -1;
 
-//    m_frame_rate_duration = -1;
-//    m_frame_rate = -1.0;
-//    m_cur_video_pts = -1;
-//    m_cur_audio_start_pts = -1;
-//    m_cur_audio_pts = -1;
-//    m_cur_audio_position = -1;
-//    m_audio_buffer_duration = -1;
-//    m_last_video_pts = -1;
+    m_frame_rate_duration = -1;
+    m_frame_rate = -1.0;
+    m_cur_video_pts = -1;
+    m_cur_audio_pts = -1;
+    m_last_video_pts = -1;
+    m_first_video_pts = -1;
 
     if (m_video_cached_que != NULL) {
         delete m_video_cached_que;
@@ -1076,39 +1073,6 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
     }
 
     audio_player->enqueue_buffer(frame->data[0], (unsigned int) frame->linesize[0]);
-//
-//    if (player->m_audio_buffer_duration == -1) {
-//        goto update_m_audio_buffer_duration;
-//    }
-//
-//    player->m_cur_audio_start_pts = (int64_t) (frame->pts *
-//                                               av_q2d(player->m_audio_stream->time_base) *
-//                                               1000000) - player->m_audio_buffer_duration;
-//
-//
-//    player->m_cur_audio_position = audio_player->get_position();
-//
-//    if (player->m_cur_audio_position < 0) {
-//        player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0,
-//                                                  0);
-//        goto end;
-//    }
-//
-//
-//    update_m_audio_buffer_duration:
-//    player->m_audio_buffer_duration = (int64_t) ((double) frame->nb_samples /
-//                                                 frame->sample_rate *
-//                                                 1000000);
-//
-//    LOGD("%s pts =%lld,"
-//         "player->m_cur_audio_start_pts=%lld,"
-//         "player->m_audio_buffer_duration=%lld,"
-//         "player->m_cur_audio_position=%lld",
-//         __func__, frame->pts,
-//         player->m_cur_audio_start_pts,
-//         player->m_audio_buffer_duration,
-//         player->m_cur_audio_position);
-
     av_frame_free(&frame);
     return;
 
@@ -1129,129 +1093,78 @@ void egl_buffer_queue_cb(void *data) {
 
     JSPlayer *player = (JSPlayer *) data;
 
-//    int64_t sync_threshold, diff, delay;
-//    int64_t delay;
-
     if (!player->m_is_playing) {
         return;
     }
-//
-//    if (player->m_cur_audio_position == -1) {
-//        av_usleep(10000);
-//        LOGD("%s player->m_cur_audio_position == -1", __func__);
-//        return;
-//    }
 
     AVFrame *frame = player->m_video_decoded_que->get();
     if (frame == NULL) {
         return;
     }
-//
-//    player->m_cur_video_pts = (int64_t) (frame->pts * av_q2d(player->m_video_stream->time_base) *
-//                                         1000000);
-//
-//    if (player->m_last_video_pts == -1) {
-//        delay = player->m_frame_rate_duration;
-//    } else {
-//        delay = player->m_cur_video_pts - player->m_last_video_pts;
-//    }
-//
-////    while (player->m_is_playing) {
-//
-//        int64_t audio_position = player->m_audio_player->get_position();
-//        if (audio_position < 0) {
-//            player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0,
-//                                                      0);
-//            goto end;
-//        }
-//
-//        player->m_cur_audio_pts =
-//                audio_position - player->m_cur_audio_position + player->m_cur_audio_start_pts;
-//
-//        /* update delay to follow master synchronisation source */
-//        /* if video is slave, we try to correct big delays by
-//           duplicating or deleting a frame */
-//        diff = player->m_cur_video_pts - player->m_cur_audio_pts;
-//        LOGD("%s diff=%lld,delay=%lld,", __func__, diff, delay);
-//        /* skip or repeat frame. We take into account the
-//           delay to compute the threshold. I still don't know
-//           if it is the best guess */
-//        sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN,
-//                               FFMIN(AV_SYNC_THRESHOLD_MAX, delay));//使用delay计算阈值；
-//
-//        if (diff <= -sync_threshold) {
-//            delay = FFMAX(0, delay + diff);
-//        } else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD) {
-//            delay = delay + diff;
-//        } else if (diff >= sync_threshold) {
-//            delay = 2 * delay;
-//        }
-//
-//        LOGD("%s sync_threshold=%lld,delay=%lld,", __func__, sync_threshold, delay);
-//
-//        av_usleep(delay);
-////    }
-//
-//    player->m_last_video_pts = player->m_cur_video_pts;
 
+    int64_t video_position = (int64_t) (frame->pts * av_q2d(player->m_video_stream->time_base) *
+                                        1000000);
+    if (player->m_first_video_pts == -1) {
+        player->m_first_video_pts = video_position;
+        player->m_cur_video_pts = 0;
+    } else {
+        player->m_cur_video_pts = video_position - player->m_first_video_pts;
+    }
 
+    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,m_video_stream->time_base.den=%d",
+         __func__,
+         player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
+         player->m_video_stream->time_base.den);
 
+    while (player->m_is_playing) {
 
-    //==========
-//    player->m_cur_video_pts = (int64_t) (frame->pts * av_q2d(player->m_video_stream->time_base) *
-//                                         1000000);
+        int64_t audio_position = player->m_audio_player->get_position();
+        player->m_cur_audio_pts = audio_position;
 //
-//    while (player->m_is_playing) {
-//
-//        int64_t audio_position = player->m_audio_player->get_position();
-//        if (audio_position < 0) {
-//            player->m_js_event_handler->call_on_error(JS_ERR_EXTERNAL, 0,
-//                                                      0);
-//            goto end;
-//        }
-//
-//        player->m_cur_audio_pts =
-//                audio_position - player->m_cur_audio_position + player->m_cur_audio_start_pts;
-//
-//        delay = player->m_cur_video_pts - player->m_cur_audio_pts;
-//
-//        if (delay < 0) {
-//            //video is slow than audio.
-//            if (delay < -25000) {
-//                //drop
-//                LOGD("%s drop video frame delay=%lld", __func__, delay);
-//                goto end;
-//            } else {
-//                //draw immediately.
-//                LOGD("%s draw immediately delay=%lld", __func__, 0);
-//                break;
-//            }
-//        } else {
-//            //audio is slow than video.
-//            //sleep
-//            if (delay <= 100000) {
-////                delay = player->m_frame_rate_duration != -1 ? player->m_frame_rate_duration : ;//fixme serial.& last-cur;
-//                delay = player->m_frame_rate_duration;
-//
-////                delay = player->m_last_video_pts != -1 ? player->m_cur_video_pts -
-////                                                         player->m_last_video_pts
-////                                                       : player->m_frame_rate_duration;
-//            }
-//            av_usleep((uint32_t) delay);
-//            LOGD("%s delay=%lld", __func__, delay);
-//            break;
-//        }
-//    }
-//    player->m_last_video_pts = player->m_cur_video_pts;
+//        LOGI("%s player->m_cur_audio_pts=%lld,audio_position=%lld,player->m_first_audio_pts=%lld,audio_position_=%lld,player->m_cur_audio_position=%lld ,player->m_cur_audio_start_pts=%lld",
+//             __func__, player->m_cur_audio_pts, audio_position, player->m_first_audio_pts,
+//             audio_position, player->m_cur_audio_position, player->m_cur_audio_start_pts);
+
+        int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
+
+        if (diff <= 0) {
+            //video is slow than audio.
+            if (diff < -25000) {
+                //drop
+                LOGD("%s drop video frame diff=%lld", __func__, diff);
+                goto end;
+            } else {
+                //draw immediately.
+                LOGD("%s draw immediately diff=%lld", __func__, diff);
+                break;
+            }
+        } else {
+            //audio is slow than video.
+            int64_t delay = diff;
+            if (delay < 40000) {
+                if (player->m_last_video_pts != -1) {
+                    delay = player->m_cur_video_pts - player->m_last_video_pts;
+                } else {
+                    delay = player->m_frame_rate_duration == -1 ? delay
+                                                                : player->m_frame_rate_duration;
+                }
+            } else {
+                av_usleep(delay);
+            }
+            LOGD("%s delay=%lld,diff=%lld", __func__, delay, diff);
+            break;
+        }
+    }
+    player->m_last_video_pts = player->m_cur_video_pts;
 
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
-//    return;
-//
-//    end:
-//    if (frame) {
-//        av_frame_free(&frame);
-//    }
+    return;
+
+    end:
+    if (frame) {
+        av_frame_free(&frame);
+    }
 }
 //fixme 硬解码 eof signal 不生效。 eof signal 异常
 
