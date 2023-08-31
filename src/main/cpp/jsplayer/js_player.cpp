@@ -1112,18 +1112,14 @@ void egl_buffer_queue_cb(void *data) {
     }
 
     LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,m_video_stream->time_base.den=%d",
-         __func__,
-         player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
-         player->m_video_stream->time_base.den);
+         __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts);
 
     while (player->m_is_playing) {
 
-        int64_t audio_position = player->m_audio_player->get_position();
-        player->m_cur_audio_pts = audio_position;
-//
-//        LOGI("%s player->m_cur_audio_pts=%lld,audio_position=%lld,player->m_first_audio_pts=%lld,audio_position_=%lld,player->m_cur_audio_position=%lld ,player->m_cur_audio_start_pts=%lld",
-//             __func__, player->m_cur_audio_pts, audio_position, player->m_first_audio_pts,
-//             audio_position, player->m_cur_audio_position, player->m_cur_audio_start_pts);
+        player->m_cur_audio_pts = player->m_audio_player->get_position();
+
+        LOGI("%s player->m_cur_audio_pts=%lld",
+             __func__, player->m_cur_audio_pts);
 
         int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
 
