@@ -1112,7 +1112,8 @@ void egl_buffer_queue_cb(void *data) {
     }
 
     LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,m_video_stream->time_base.den=%d",
-         __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts);
+         __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
+         player->m_video_stream->time_base.den);
 
     while (player->m_is_playing) {
 
@@ -1125,7 +1126,7 @@ void egl_buffer_queue_cb(void *data) {
 
         if (diff <= 0) {
             //video is slow than audio.
-            if (diff < -25000) {
+            if (diff < -100000) {
                 //drop
                 LOGD("%s drop video frame diff=%lld", __func__, diff);
                 goto end;
