@@ -446,7 +446,9 @@ void JSPlayer::stop_play(bool is_to_pause) {
         LOGD("%s stop_play stop decode audio step2.", __func__);
 
         LOGD("%s stop_play stop play audio step1.", __func__);
-        while (m_is_audio_data_consuming);
+        while (m_is_audio_data_consuming){
+            av_usleep(1);
+        };
         LOGD("%s stop_play stop play audio step2.", __func__);
     }
 
@@ -554,7 +556,9 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
     LOGD("%s stop play audio step1.", __func__);
     m_audio_decoded_que->abort_get();
     LOGD("%s stop play audio step2.", __func__);
-    while (m_is_audio_data_consuming);
+    while (m_is_audio_data_consuming){
+        av_usleep(1);
+    }
     LOGD("%s stop play audio step3.", __func__);
     m_audio_decoded_que->clear_abort_get();
     pthread_create(&m_play_audio_tid, NULL, play_audio_thread,
@@ -1132,46 +1136,38 @@ void egl_buffer_queue_cb(void *data) {
     }
 
     player->m_cur_audio_pts = audio_position;
-
-    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,player->m_cur_audio_pts=%lld,player->m_video_decoded_que->get_num=%lld",
+    int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
+    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,player->m_cur_audio_pts=%lld,diff=%lld,player->m_video_decoded_que->get_num=%lld",
          __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
-         player->m_cur_audio_pts,
+         player->m_cur_audio_pts, diff,
          player->m_video_decoded_que->get_num());
 
-    while (player->m_is_playing) {
-
-        int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
-
-        if (diff <= 0) {
-            //video is slow than audio.
-            if (diff < -100000) {
-                //drop
-                LOGD("%s drop video frame diff=%lld", __func__, diff);
-                goto end;
+    if (diff <= 0) {
+        //video is slow than audio.
+        if (diff < -100000) {
+            //drop
+            LOGD("%s drop video frame diff=%lld", __func__, diff);
+            goto end;
+        } else {
+            //draw immediately.
+            LOGD("%s draw immediately diff=%lld", __func__, diff);
+        }
+    } else {
+        //audio is slow than video.
+        int64_t delay = diff;
+        if (delay < 40000) {
+            if (player->m_last_video_pts != -1) {
+                delay = player->m_cur_video_pts - player->m_last_video_pts;
             } else {
-                //draw immediately.
-                LOGD("%s draw immediately diff=%lld", __func__, diff);
-                break;
+                delay = player->m_frame_rate_duration == -1 ? delay
+                                                            : player->m_frame_rate_duration;
             }
         } else {
-            //audio is slow than video.
-            int64_t delay = diff;
-            if (delay < 40000) {
-                if (player->m_last_video_pts != -1) {
-                    delay = player->m_cur_video_pts - player->m_last_video_pts;
-                } else {
-                    delay = player->m_frame_rate_duration == -1 ? delay
-                                                                : player->m_frame_rate_duration;
-                }
-            } else {
-                av_usleep(delay);
-            }
-            LOGD("%s delay=%lld,diff=%lld", __func__, delay, diff);
-            break;
+            av_usleep(delay);
         }
+        LOGD("%s delay=%lld,diff=%lld", __func__, delay, diff);
     }
     player->m_last_video_pts = player->m_cur_video_pts;
-
     player->m_egl_renderer->render(frame);
     av_frame_free(&frame);
     return;
