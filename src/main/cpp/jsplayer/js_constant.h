@@ -41,8 +41,8 @@ typedef int JS_RET;
 #define DEFAULT_MAX_CACHED_DURATION_RECORD                      1000000*60*3/2//1.5min
 //#define DEFAULT_MIN_DECODED_DURATION_RECORD                     1000000*5//5s
 //#define DEFAULT_MAX_DECODED_DURATION_RECORD                     1000000*10//10s
-#define DEFAULT_MIN_DECODED_DURATION_RECORD                     0
-#define DEFAULT_MAX_DECODED_DURATION_RECORD                     1000000//1s
+#define DEFAULT_MIN_DECODED_DURATION_RECORD                     1000000//1s
+#define DEFAULT_MAX_DECODED_DURATION_RECORD                     5000000//5s
 
 //todo map value from Constant.java.
 /*play status*/

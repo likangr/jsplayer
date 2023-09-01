@@ -25,6 +25,9 @@ JSPlayer::JSPlayer(jobject java_js_player) {
     m_js_media_decoder = new JSMediaDecoder(m_js_event_handler);
     m_js_media_converter = new JSMediaCoverter();
 
+    pthread_mutex_init(m_mutex, NULL);
+    pthread_cond_init(m_cond, NULL);
+
     m_cur_play_status = PLAY_STATUS_CREATED;
 }
 
@@ -42,6 +45,9 @@ JSPlayer::~JSPlayer() {
     delete m_js_media_decoder;
     delete m_js_event_handler;
     delete m_js_media_converter;
+
+    pthread_mutex_destroy(m_mutex);
+    pthread_cond_destroy(m_cond);
 }
 
 void JSPlayer::prepare() {
@@ -433,6 +439,8 @@ void JSPlayer::stop_play(bool is_to_pause) {
             m_audio_decoded_que->abort_put();
         }
 
+        pthread_cond_signal(m_cond);
+
         LOGD("%s stop_play stop decode audio step1.", __func__);
         pthread_join(m_decode_audio_tid, NULL);
         LOGD("%s stop_play stop decode audio step2.", __func__);
@@ -487,6 +495,9 @@ void JSPlayer::free_res() {
     m_last_video_pts = -1;
     m_first_video_pts = -1;
 
+    m_is_video_buffering = false;
+    m_is_audio_buffering = false;
+
     if (m_video_cached_que != NULL) {
         delete m_video_cached_que;
         m_video_cached_que = NULL;
@@ -539,6 +550,7 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
     }
 
     //replay audio use new engine.
+    pthread_cond_signal(m_cond);
     LOGD("%s stop play audio step1.", __func__);
     m_audio_decoded_que->abort_get();
     LOGD("%s stop play audio step2.", __func__);
@@ -1063,9 +1075,11 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
     JSAudioPlayer *audio_player = player->m_audio_player;
     AVFrame *frame = NULL;
     player->m_is_audio_data_consuming = true;
-
     if (!player->m_is_playing) {
         goto end;
+    }
+    if (player->m_is_video_buffering) {
+        pthread_cond_wait(player->m_cond, player->m_mutex);
     }
     frame = player->m_audio_decoded_que->get();
     if (frame == NULL) {
@@ -1091,7 +1105,15 @@ void egl_buffer_queue_cb(void *data) {
     JSPlayer *player = (JSPlayer *) data;
     int64_t audio_position = player->m_audio_player->get_position();
 
-    if (!player->m_is_playing || audio_position <= 0) {
+    if (!player->m_is_playing) {
+        return;
+    }
+    if (player->m_is_audio_buffering) {
+        av_usleep(1000);
+        return;
+    }
+    if (audio_position <= 0) {
+        av_usleep(1000);
         return;
     }
 
@@ -1109,16 +1131,14 @@ void egl_buffer_queue_cb(void *data) {
         player->m_cur_video_pts = video_position - player->m_first_video_pts;
     }
 
-    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,m_video_stream->time_base.den=%d",
-         __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
-         player->m_video_stream->time_base.den);
+    player->m_cur_audio_pts = audio_position;
 
+    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,player->m_cur_audio_pts=%lld,player->m_video_decoded_que->get_num=%lld",
+         __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
+         player->m_cur_audio_pts,
+         player->m_video_decoded_que->get_num());
 
     while (player->m_is_playing) {
-        player->m_cur_audio_pts = audio_position;
-
-        LOGI("%s player->m_cur_audio_pts=%lld",
-             __func__, player->m_cur_audio_pts);
 
         int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
 
@@ -1184,29 +1204,30 @@ void video_decoded_que_clear_callback(void *data) {
 }
 
 void audio_cached_que_buffering_callback(void *data, bool is_buffering) {
-    JSPlayer *player = (JSPlayer *) data;
-    if (is_buffering) {
-        LOGD("%s start buffering audio packet.", __func__);
-    } else {
-        LOGD("%s stop buffering audio packet.", __func__);
-    }
-
-    player->m_js_event_handler->call_on_buffering(is_buffering);
+//    JSPlayer *player = (JSPlayer *) data;
+//    if (is_buffering) {
+//        LOGD("%s start buffering audio packet.", __func__);
+//    } else {
+//        LOGD("%s stop buffering audio packet.", __func__);
+//    }
+//
+//    player->m_js_event_handler->call_on_buffering(is_buffering);
 }
 
 void video_cached_que_buffering_callback(void *data, bool is_buffering) {
-    JSPlayer *player = (JSPlayer *) data;
-    if (is_buffering) {
-        LOGD("%s start buffering video packet.", __func__);
-    } else {
-        LOGD("%s stop buffering video packet.", __func__);
-    }
-    player->m_js_event_handler->call_on_buffering(is_buffering);
+//    JSPlayer *player = (JSPlayer *) data;
+//    if (is_buffering) {
+//        LOGD("%s start buffering video packet.", __func__);
+//    } else {
+//        LOGD("%s stop buffering video packet.", __func__);
+//    }
+//    player->m_js_event_handler->call_on_buffering(is_buffering);
 }
 
 
 void audio_decoded_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
+    player->m_is_audio_buffering = is_buffering;
     if (is_buffering) {
         LOGD("%s start buffering audio frame.", __func__);
     } else {
@@ -1217,9 +1238,11 @@ void audio_decoded_que_buffering_callback(void *data, bool is_buffering) {
 
 void video_decoded_que_buffering_callback(void *data, bool is_buffering) {
     JSPlayer *player = (JSPlayer *) data;
+    player->m_is_video_buffering = is_buffering;
     if (is_buffering) {
         LOGD("%s start buffering video frame.", __func__);
     } else {
+        pthread_cond_signal(player->m_cond);
         LOGD("%s stop buffering video frame.", __func__);
     }
     player->m_js_event_handler->call_on_buffering(is_buffering);
@@ -1232,7 +1255,9 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
     JSEventHandler *js_event_handler = player->m_js_event_handler;
     player->m_is_audio_data_consuming = true;
     while (player->m_is_playing) {
-
+        if (player->m_is_video_buffering) {
+            pthread_cond_wait(player->m_cond, player->m_mutex);
+        }
         frame = player->m_audio_decoded_que->get();
         if (frame == NULL) {
             break;

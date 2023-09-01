@@ -186,6 +186,13 @@ public:
     int64_t m_cur_audio_pts = -1;
     int64_t m_last_video_pts = -1;
     int64_t m_first_video_pts = -1;
+
+    bool m_is_video_buffering = false;
+    bool m_is_audio_buffering = false;
+
+    pthread_mutex_t m_mutex0, *m_mutex = &m_mutex0;
+    pthread_cond_t m_cond0, *m_cond = &m_cond0;
+
 };
 
 /***
