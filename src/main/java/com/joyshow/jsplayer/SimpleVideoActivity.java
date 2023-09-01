@@ -1,7 +1,9 @@
 package com.joyshow.jsplayer;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.view.View;
@@ -38,6 +40,13 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_simple_video);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(new String[]{Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO}, 1000);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            requestPermissions(new String[]{Manifest.permission.MANAGE_EXTERNAL_STORAGE}, 1000);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1000);
+        }
 
         mPlayer = (JSPlayer) findViewById(R.id.jsplayer);
 //        mPlayer.setUrl("http://live.hkstv.hk.lxdns.com/live/hks/playlist.m3u8");

@@ -688,7 +688,6 @@ void *prepare_thread(void *data) {
 void *play_audio_thread(void *data) {
 
     JSPlayer *player = (JSPlayer *) data;
-    player->m_is_audio_data_consuming = true;
 
     if (player->m_is_intercept_audio) {
         pthread_setname_np(pthread_self(), "play_audio_consume_audio_data_by_interceptor");
@@ -1063,6 +1062,7 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
     JSPlayer *player = (JSPlayer *) data;
     JSAudioPlayer *audio_player = player->m_audio_player;
     AVFrame *frame = NULL;
+    player->m_is_audio_data_consuming = true;
 
     if (!player->m_is_playing) {
         goto end;
@@ -1077,9 +1077,6 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
     return;
 
     end:
-    if (frame) {
-        av_frame_free(&frame);
-    }
     player->m_is_audio_data_consuming = false;
 }
 
@@ -1092,8 +1089,9 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
 void egl_buffer_queue_cb(void *data) {
 
     JSPlayer *player = (JSPlayer *) data;
+    int64_t audio_position = player->m_audio_player->get_position();
 
-    if (!player->m_is_playing) {
+    if (!player->m_is_playing || audio_position <= 0) {
         return;
     }
 
@@ -1115,9 +1113,9 @@ void egl_buffer_queue_cb(void *data) {
          __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
          player->m_video_stream->time_base.den);
 
-    while (player->m_is_playing) {
 
-        player->m_cur_audio_pts = player->m_audio_player->get_position();
+    while (player->m_is_playing) {
+        player->m_cur_audio_pts = audio_position;
 
         LOGI("%s player->m_cur_audio_pts=%lld",
              __func__, player->m_cur_audio_pts);
@@ -1232,7 +1230,7 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
 
     AVFrame *frame = NULL;
     JSEventHandler *js_event_handler = player->m_js_event_handler;
-
+    player->m_is_audio_data_consuming = true;
     while (player->m_is_playing) {
 
         frame = player->m_audio_decoded_que->get();
