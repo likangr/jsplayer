@@ -2,3 +2,4 @@
 .externalNativeBuild
 jsplayerlib.iml
 /libs_source
+/.cxx/Debug/
