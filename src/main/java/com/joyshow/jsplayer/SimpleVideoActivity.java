@@ -26,7 +26,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     static {
         JSPlayer.setLoggable(true);
-        JSPlayer.setIsWriteLogToFile(true);
+//        JSPlayer.setIsWriteLogToFile(true);
         JSPlayer.setLogFileSavePath(SDCARD_PATH + File.separator + "simple_video_activity_log.txt");
     }
 

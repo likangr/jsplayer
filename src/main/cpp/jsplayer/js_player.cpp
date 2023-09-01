@@ -446,7 +446,7 @@ void JSPlayer::stop_play(bool is_to_pause) {
         LOGD("%s stop_play stop decode audio step2.", __func__);
 
         LOGD("%s stop_play stop play audio step1.", __func__);
-        while (m_is_audio_data_consuming){
+        while (m_is_audio_data_consuming) {
             av_usleep(1);
         };
         LOGD("%s stop_play stop play audio step2.", __func__);
@@ -556,7 +556,7 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
     LOGD("%s stop play audio step1.", __func__);
     m_audio_decoded_que->abort_get();
     LOGD("%s stop play audio step2.", __func__);
-    while (m_is_audio_data_consuming){
+    while (m_is_audio_data_consuming) {
         av_usleep(1);
     }
     LOGD("%s stop play audio step3.", __func__);
@@ -1137,10 +1137,10 @@ void egl_buffer_queue_cb(void *data) {
 
     player->m_cur_audio_pts = audio_position;
     int64_t diff = player->m_cur_video_pts - player->m_cur_audio_pts;
-    LOGI("%s player->m_cur_video_pts=%lld,frame->pts=%lld,player->m_first_video_pts=%lld,player->m_cur_audio_pts=%lld,diff=%lld,player->m_video_decoded_que->get_num=%lld",
+    LOGI("%s m_cur_video_pts=%lld,frame->pts=%lld,m_first_video_pts=%lld,m_cur_audio_pts=%lld,diff=%lld,m_video_decoded_que->get_num=%lld,m_video_cached_que->get_num=%lld",
          __func__, player->m_cur_video_pts, frame->pts, player->m_first_video_pts,
          player->m_cur_audio_pts, diff,
-         player->m_video_decoded_que->get_num());
+         player->m_video_decoded_que->get_num(), player->m_video_cached_que->get_num());
 
     if (diff <= 0) {
         //video is slow than audio.
