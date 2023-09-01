@@ -103,7 +103,6 @@ void JSPlayer::play(bool is_to_resume) {
 void JSPlayer::pause() {
     LOGD("%s pause...", __func__);
     stop_play(true);
-//    m_cur_audio_position = -1;
     m_cur_play_status = PLAY_STATUS_PAUSED;
     LOGD("%s paused.", __func__);
 }
@@ -1167,8 +1166,8 @@ void egl_buffer_queue_cb(void *data) {
         }
         LOGD("%s delay=%lld,diff=%lld", __func__, delay, diff);
     }
-    player->m_last_video_pts = player->m_cur_video_pts;
     player->m_egl_renderer->render(frame);
+    player->m_last_video_pts = player->m_cur_video_pts;
     av_frame_free(&frame);
     return;
 

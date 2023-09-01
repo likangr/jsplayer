@@ -153,13 +153,13 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     @Override
     protected void onResume() {
         super.onResume();
-        mPlayer.resume();
+//        mPlayer.resume();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
-        mPlayer.pause();
+//        mPlayer.pause();
     }
 
     @Override
