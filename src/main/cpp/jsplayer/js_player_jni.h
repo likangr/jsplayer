@@ -23,7 +23,7 @@ void JS_JNI_CALL set_loggable(JNIEnv *env, jclass clz, jboolean loggable);
 
 jboolean JS_JNI_CALL get_loggable(JNIEnv *env, jclass clz);
 
-void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, bool is_write_log_to_file);
+void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, jboolean is_write_log_to_file);
 
 jboolean JS_JNI_CALL get_is_write_log_to_file(JNIEnv *env, jclass clz);
 
@@ -72,6 +72,8 @@ void JS_JNI_CALL
 set_channel_mute(JNIEnv *env, jobject obj, jlong handle, jint channel, jboolean mute);
 
 jint JS_JNI_CALL get_play_status(JNIEnv *env, jobject obj, jlong handle);
+
+void JS_JNI_CALL seek(JNIEnv *env, jobject obj, jlong handle, jlong timestamp);
 
 void JS_JNI_CALL intercept_audio(JNIEnv *env, jobject obj, jlong handle, jboolean is_intercept);
 

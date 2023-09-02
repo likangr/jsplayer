@@ -43,6 +43,7 @@ static JNINativeMethod js_player_methods[] = {
         {"getVolume",                                       "(J)I",                                     (jint *) get_volume},
         {"setChannelMute",                                  "(JIZ)V",                                   (void *) set_channel_mute},
         {"getPlayStatus",                                   "(J)I",                                     (jint *) get_play_status},
+        {"seek",                                            "(JJ)I",                                    (void *) seek},
         {"interceptPcmData",                                "(JZ)V",                                    (void *) intercept_audio},
         {"parseDataFromVideoPacket",                        "(JZ)V",                                    (void *) parse_data_from_video_packet},
         {"setNativeInterceptedPcmDataCallbackHandle",       "(JJ)V",                                    (void *) set_native_intercepted_pcm_data_callback_handle},
@@ -91,7 +92,7 @@ jboolean JS_JNI_CALL get_loggable(JNIEnv *env, jclass cls) {
     return get_loggable_();
 }
 
-void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, bool is_write_log_to_file) {
+void JS_JNI_CALL set_is_write_log_to_file(JNIEnv *env, jclass clz, jboolean is_write_log_to_file) {
     set_is_write_log_to_file_(is_write_log_to_file);
 }
 
@@ -269,7 +270,6 @@ void JS_JNI_CALL set_mute(JNIEnv *env, jobject obj, jlong handle, jboolean mute)
 
     JSPlayer *player = (JSPlayer *) handle;
     player->set_mute(mute);
-
 }
 
 
@@ -340,6 +340,11 @@ int JS_JNI_CALL get_play_status(JNIEnv *env, jobject obj, jlong handle) {
     return player->m_cur_play_status;
 }
 
+void JS_JNI_CALL seek(JNIEnv *env, jobject obj, jlong handle, jlong timestamp) {
+
+    JSPlayer *player = (JSPlayer *) handle;
+    player->seek(timestamp);
+}
 
 void JS_JNI_CALL register_js_player_methods(JNIEnv *env) {
     jclass cls = env->FindClass(JS_PLAYER_CLASS);

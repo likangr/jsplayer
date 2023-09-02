@@ -41,6 +41,8 @@ public:
 
     void destroy();
 
+    void seek(int64_t timestamp);
+
     /*prepare*/
 
     JS_RET find_stream_info();

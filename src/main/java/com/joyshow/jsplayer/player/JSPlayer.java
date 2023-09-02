@@ -27,7 +27,7 @@ public class JSPlayer extends FrameLayout {
 
     private JSSurfaceView mJSRenderView;
     private long mNativePlayer;
-    private Handler mMainThreadHandler = new Handler();
+    private final Handler mMainThreadHandler = new Handler();
     private boolean mIsWantToPause = false;
 
     private OnPreparedListener mOnPreparedListener;
@@ -41,12 +41,10 @@ public class JSPlayer extends FrameLayout {
         CHANNEL_LEFT, CHANNEL_RIGHT
     }
 
-
     public JSPlayer(Context context) {
         super(context);
         init();
     }
-
 
     public JSPlayer(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -499,6 +497,15 @@ public class JSPlayer extends FrameLayout {
         return getPlayStatus() == Constant.PLAY_STATUS_DESTROYED;
     }
 
+    /**
+     * seek.
+     *
+     * @param timestamp in millisecond.
+     */
+    public synchronized void seek(long timestamp) {
+        checkDestroyedException(StackTraceInfo.getMethodName());
+        seek(mNativePlayer, timestamp);
+    }
 
     /**
      * set is intercept pcm data.
@@ -551,7 +558,6 @@ public class JSPlayer extends FrameLayout {
         } else {
             removeView(mJSRenderView);
         }
-
     }
 
     /**
@@ -622,16 +628,13 @@ public class JSPlayer extends FrameLayout {
      */
     private void onPrepared() {
         if (mOnPreparedListener != null) {
-            mMainThreadHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (JSPlayer.this) {
-                        if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
-                            Logger.w(TAG, "call onPrepared failed,player isn't prepared.");
-                            return;
-                        }
-                        mOnPreparedListener.onPrepared(JSPlayer.this);
+            mMainThreadHandler.post(() -> {
+                synchronized (JSPlayer.this) {
+                    if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
+                        Logger.w(TAG, "call onPrepared failed,player isn't prepared.");
+                        return;
                     }
+                    mOnPreparedListener.onPrepared(JSPlayer.this);
                 }
             });
         }
@@ -644,18 +647,15 @@ public class JSPlayer extends FrameLayout {
     private void onError(final int what, final int arg1, final int arg2) {
 
         if (mOnErrorListener != null) {
-            mMainThreadHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (JSPlayer.this) {
-                        if (isDestroyed()) {
-                            Logger.w(TAG, "call onError failed,player is destroyed.");
-                            return;
-                        }
-
-                        reset();
-                        mOnErrorListener.onError(JSPlayer.this, what, arg1, arg2);
+            mMainThreadHandler.post(() -> {
+                synchronized (JSPlayer.this) {
+                    if (isDestroyed()) {
+                        Logger.w(TAG, "call onError failed,player is destroyed.");
+                        return;
                     }
+
+                    reset();
+                    mOnErrorListener.onError(JSPlayer.this, what, arg1, arg2);
                 }
             });
         }
@@ -667,16 +667,13 @@ public class JSPlayer extends FrameLayout {
     private void onInfo(final int what, final int arg1, final int arg2) {
 
         if (mOnInfoListener != null) {
-            mMainThreadHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (JSPlayer.this) {
-                        if (isDestroyed()) {
-                            Logger.w(TAG, "call onInfo failed,player is destroyed.");
-                            return;
-                        }
-                        mOnInfoListener.onInfo(JSPlayer.this, what, arg1, arg2);
+            mMainThreadHandler.post(() -> {
+                synchronized (JSPlayer.this) {
+                    if (isDestroyed()) {
+                        Logger.w(TAG, "call onInfo failed,player is destroyed.");
+                        return;
                     }
+                    mOnInfoListener.onInfo(JSPlayer.this, what, arg1, arg2);
                 }
             });
         }
@@ -687,17 +684,14 @@ public class JSPlayer extends FrameLayout {
      */
     private void onCompleted() {
         if (mOnCompletedListener != null) {
-            mMainThreadHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (JSPlayer.this) {
-                        if (isDestroyed()) {
-                            Logger.w(TAG, "call onCompleted failed,player is destroyed.");
-                            return;
-                        }
-                        reset();
-                        mOnCompletedListener.onCompleted(JSPlayer.this);
+            mMainThreadHandler.post(() -> {
+                synchronized (JSPlayer.this) {
+                    if (isDestroyed()) {
+                        Logger.w(TAG, "call onCompleted failed,player is destroyed.");
+                        return;
                     }
+                    reset();
+                    mOnCompletedListener.onCompleted(JSPlayer.this);
                 }
             });
         }
@@ -708,16 +702,13 @@ public class JSPlayer extends FrameLayout {
      */
     private void onBuffering(final boolean isBuffering) {
         if (mOnBufferingListener != null) {
-            mMainThreadHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (JSPlayer.this) {
-                        if (isDestroyed()) {
-                            Logger.w(TAG, "call onCompleted failed,player is destroyed.");
-                            return;
-                        }
-                        mOnBufferingListener.onBuffering(JSPlayer.this, isBuffering);
+            mMainThreadHandler.post(() -> {
+                synchronized (JSPlayer.this) {
+                    if (isDestroyed()) {
+                        Logger.w(TAG, "call onCompleted failed,player is destroyed.");
+                        return;
                     }
+                    mOnBufferingListener.onBuffering(JSPlayer.this, isBuffering);
                 }
             });
         }
@@ -829,6 +820,8 @@ public class JSPlayer extends FrameLayout {
     private native void setChannelMute(long handle, int channelIndex, boolean mute);
 
     private native int getPlayStatus(long handle);
+
+    private native int seek(long handle, long timestamp);
 
     private native void interceptPcmData(long handle, boolean isInterceptPcmData);
 
