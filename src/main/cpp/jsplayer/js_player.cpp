@@ -65,11 +65,8 @@ void JSPlayer::prepare() {
 void JSPlayer::play(bool is_to_resume) {
     LOGD("%s play...", __func__);
     m_is_playing = true;
-    if (is_to_resume) {
-        if (m_is_live) {
-            start_read_frame();
-        }
-    } else {
+
+    if (!is_to_resume || m_is_live) {
         start_read_frame();
     }
 
@@ -452,7 +449,6 @@ void JSPlayer::stop_play(bool is_to_pause) {
     }
 
     if (!is_to_pause || m_is_live) {
-
         stop_read_frame();
     }
 
