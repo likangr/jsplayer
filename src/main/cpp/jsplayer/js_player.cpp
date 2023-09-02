@@ -788,6 +788,33 @@ void *read_frame_thread(void *data) {
     pthread_exit(0);
 }
 
+//int index = 0;
+//
+//#include <cstdio>
+//
+//#include <iostream>
+//#include <sys/stat.h>
+//#include <sys/types.h>
+//
+//void write_yuv(AVFrame *frame, bool isRender) {
+//    LOGD("frame->nb_samples=%d", frame->nb_samples);
+//    mkdir("/sdcard/frame", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+//    char str[1024] = {0};
+//    sprintf(str, "/sdcard/frame/test-%d-%lld.yuv", isRender, frame->pts);
+//    FILE *fp = fopen(str, "wb+");
+//    // w、h是视频的实际宽高
+//    for (int i = 0; i < 1080; i++) {
+//        fwrite(frame->data[0] + i * frame->linesize[0], 1, 1920, fp);//y
+//    }
+//    for (int i = 0; i < 1080 / 2; i++) {
+//        fwrite(frame->data[1] + i * frame->linesize[1], 1, 1920 / 2, fp);//u
+//    }
+//    for (int i = 0; i < 1080 / 2; i++) {
+//        fwrite(frame->data[2] + i * frame->linesize[2], 1, 1920 / 2, fp);//v
+//    }
+//    fclose(fp);
+//}
+
 void *decode_video_thread(void *data) {
 
     pthread_setname_np(pthread_self(), __func__);

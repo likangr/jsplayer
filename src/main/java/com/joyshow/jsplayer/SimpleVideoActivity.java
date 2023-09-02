@@ -26,7 +26,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     static {
         JSPlayer.setLoggable(true);
-//        JSPlayer.setIsWriteLogToFile(true);
+//        JSPlayer.setIsWriteLogToFile(false);
         JSPlayer.setLogFileSavePath(SDCARD_PATH + File.separator + "simple_video_activity_log.txt");
     }
 
@@ -77,8 +77,9 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         mPlayer.setUrl(SDCARD_PATH + File.separator + "2.mp4");
 
 
-        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
+//        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
 //        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_SW);
+        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_HW);
         mPlayer.prepare();
 
         mPlayer.setOnPreparedListener(this);

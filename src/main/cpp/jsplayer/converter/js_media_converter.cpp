@@ -120,7 +120,15 @@ JS_RET fill_video_frame(JSMediaDecoderContext *ctx,
 
     int ret;
 
-    av_frame_ref(frame, ctx->frame_buf);
+    frame->width = ctx->width;
+    frame->height = ctx->height;
+    frame->format = DEFAULT_AV_PIX_FMT;
+
+    //todo how to set align value.
+    if (av_frame_get_buffer(frame, 0) != 0) {
+        LOGE("%s av_frame_get_buffer failed", __func__);
+        return JS_ERR;
+    }
 
     //fixme maybe inaccuracy.
     frame->key_frame = (info->flags &

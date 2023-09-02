@@ -36,13 +36,13 @@ public:
 
     void set_buffering_callback(BUFFERING_CALLBACK callback, void *data);
 
-    virtual void clear(bool is_keep_signal_element)=0;
+    virtual void clear(bool is_keep_signal_element) = 0;
 
     int64_t get_num();
 
-    virtual int64_t get_duration()=0;
+    virtual int64_t get_duration() = 0;
 
-    virtual T get()=0;
+    virtual T get() = 0;
 
     JS_RET (JSQueue::*put)(T element);
 
@@ -360,7 +360,7 @@ public:
                 m_is_need_to_drop_until_i_frame = false;
             } else {
                 av_packet_free(&src);
-                LOGD("%s *drop* drop a non-key frame until key video packet.",__func__);
+                LOGD("%s *drop* drop a non-key frame until key video packet.", __func__);
                 pthread_mutex_unlock(m_mutex);
                 return JS_OK;
             }

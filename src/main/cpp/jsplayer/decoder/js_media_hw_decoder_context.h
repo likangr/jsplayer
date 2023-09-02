@@ -43,8 +43,6 @@ public:
     u_int32_t yuv_fourcc = 0;
     size_t nal_size = 0;
 
-
-    AVFrame *frame_buf = NULL;
 private:
     JS_RET update_pix_fmt();
 };
