@@ -75,11 +75,10 @@ void JSPlayer::play(bool is_to_resume) {
         m_audio_cached_que->clear_abort_put();
         m_audio_decoded_que->clear_abort_get();
         m_audio_decoded_que->clear_abort_put();
-
-        start_decode_audio();
-
-        pthread_create(&m_play_audio_tid, NULL, play_audio_thread,
-                       this);
+        if (!is_to_resume) {
+            start_decode_audio();
+        }
+        pthread_create(&m_play_audio_tid, NULL, play_audio_thread, this);
         LOGD("%s play_audio_thread...", __func__);
     }
     if (m_has_video_stream) {
@@ -87,9 +86,9 @@ void JSPlayer::play(bool is_to_resume) {
         m_video_cached_que->clear_abort_put();
         m_video_decoded_que->clear_abort_get();
         m_video_decoded_que->clear_abort_put();
-
-        start_decode_video();
-
+        if (!is_to_resume) {
+            start_decode_video();
+        }
         m_egl_renderer->start_render();
         LOGD("%s start_render...", __func__);
     }
@@ -99,7 +98,7 @@ void JSPlayer::play(bool is_to_resume) {
 
 void JSPlayer::pause() {
     LOGD("%s pause...", __func__);
-    stop_play(true);
+    pause_play();
     m_cur_play_status = PLAY_STATUS_PAUSED;
     LOGD("%s paused.", __func__);
 }
@@ -127,7 +126,7 @@ void JSPlayer::reset() {
     } else if (m_cur_play_status == PLAY_STATUS_PREPARED) {
         free_res();
     } else if (m_cur_play_status == PLAY_STATUS_PLAYING) {
-        stop_play(false);
+        stop_play();
         free_res();
     } else if (m_cur_play_status == PLAY_STATUS_PAUSED) {
         if (!m_is_live) {
@@ -381,10 +380,10 @@ void JSPlayer::start_decode_video() {
 
 void JSPlayer::stop_read_frame() {
     LOGD("%s stop_read_frame...", __func__);
-    if (m_has_video_stream && !m_is_live) {
+    if (m_has_video_stream) {
         m_video_cached_que->abort_put();
     }
-    if (m_has_audio_stream && !m_is_live) {
+    if (m_has_audio_stream) {
         m_audio_cached_que->abort_put();
     }
 
@@ -403,58 +402,62 @@ void JSPlayer::stop_read_frame() {
     LOGD("%s stop_read_frame finished.", __func__);
 }
 
-
-void JSPlayer::stop_play(bool is_to_pause) {
-    LOGD("%s stop_play...", __func__);
+void JSPlayer::pause_play() {
+    LOGD("%s pause_play...", __func__);
     m_is_playing = false;
-
     if (m_has_video_stream) {
-        m_video_cached_que->abort_get();
         m_video_decoded_que->abort_get();
-
-        if (!m_is_live) {
-            m_video_decoded_que->abort_put();
-        }
-
-        LOGD("%s stop_play stop decode video step1.", __func__);
-        pthread_join(m_decode_video_tid, NULL);
-        LOGD("%s stop_play stop decode video step2.", __func__);
-
-
         LOGD("%s stop_play stop render step1.", __func__);
         m_egl_renderer->stop_render();
         LOGD("%s stop_play stop render step2.", __func__);
-
     }
-
     if (m_has_audio_stream) {
-        m_audio_cached_que->abort_get();
         m_audio_decoded_que->abort_get();
-
-        if (!m_is_live) {
-            m_audio_decoded_que->abort_put();
-        }
-
         pthread_cond_signal(m_cond);
-
-        LOGD("%s stop_play stop decode audio step1.", __func__);
-        pthread_join(m_decode_audio_tid, NULL);
-        LOGD("%s stop_play stop decode audio step2.", __func__);
-
         LOGD("%s stop_play stop play audio step1.", __func__);
         while (m_is_audio_data_consuming) {
             av_usleep(1);
         };
         LOGD("%s stop_play stop play audio step2.", __func__);
     }
-
-    if (!is_to_pause || m_is_live) {
+    if (m_is_live) {
         stop_read_frame();
     }
-
     LOGD("%s stop_play finished.", __func__);
 }
 
+void JSPlayer::stop_play() {
+    LOGD("%s stop_play...", __func__);
+    m_is_playing = false;
+    if (m_has_video_stream) {
+        m_video_cached_que->abort_get();
+        m_video_decoded_que->abort_get();
+        m_video_decoded_que->abort_put();
+        LOGD("%s stop_play stop decode video step1.", __func__);
+        pthread_join(m_decode_video_tid, NULL);
+        LOGD("%s stop_play stop decode video step2.", __func__);
+        LOGD("%s stop_play stop render step1.", __func__);
+        m_egl_renderer->stop_render();
+        LOGD("%s stop_play stop render step2.", __func__);
+
+    }
+    if (m_has_audio_stream) {
+        m_audio_cached_que->abort_get();
+        m_audio_decoded_que->abort_get();
+        m_audio_decoded_que->abort_put();
+        pthread_cond_signal(m_cond);
+        LOGD("%s stop_play stop decode audio step1.", __func__);
+        pthread_join(m_decode_audio_tid, NULL);
+        LOGD("%s stop_play stop decode audio step2.", __func__);
+        LOGD("%s stop_play stop play audio step1.", __func__);
+        while (m_is_audio_data_consuming) {
+            av_usleep(1);
+        };
+        LOGD("%s stop_play stop play audio step2.", __func__);
+    }
+    stop_read_frame();
+    LOGD("%s stop_play finished.", __func__);
+}
 
 void JSPlayer::stop_prepare() {
     LOGD("%s stop_prepare...", __func__);
@@ -1113,10 +1116,12 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
     }
 
     audio_player->enqueue_buffer(frame->data[0], (unsigned int) frame->linesize[0]);
+    player->m_cur_audio_pts = player->m_audio_player->get_position();
     av_frame_free(&frame);
     return;
 
     end:
+    audio_player->update_paused_position();
     player->m_is_audio_data_consuming = false;
 }
 

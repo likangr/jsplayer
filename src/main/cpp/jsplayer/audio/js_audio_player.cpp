@@ -251,7 +251,26 @@ int64_t JSAudioPlayer::get_position() {
         LOGE("%s GetPosition failed: errcode=%d", __func__, ret);
         return -1;
     }
-    return sec * 1000;
+    int64_t position = sec * 1000;
+    if (m_paused_position != -1) {
+        position = m_paused_position + position;
+    }
+    return position;
+}
+
+void JSAudioPlayer::update_paused_position() {
+    SLresult ret;
+    SLmillisecond sec;
+    ret = (*m_player_itf)->GetPosition(m_player_itf, &sec);
+    if (SL_RESULT_SUCCESS != ret) {
+        LOGE("%s GetPosition failed: errcode=%d", __func__, ret);
+        return;
+    }
+    if (m_paused_position == -1) {
+        m_paused_position = sec * 1000;
+    } else {
+        m_paused_position = sec * 1000 + m_paused_position;
+    }
 }
 
 JS_RET JSAudioPlayer::clear() {
@@ -336,6 +355,7 @@ void JSAudioPlayer::reset() {
     m_channel_count = 0;
     m_rate = 0;
     m_bits_per_sample = 0;
+    m_paused_position = -1;
 
     // destroy buffer m_dequeue audio player object, and invalidate all associated interfaces
     if (m_player_object_itf != NULL) {

@@ -21,6 +21,8 @@ public :
 
     int64_t get_position();
 
+    void update_paused_position();
+
     JS_RET clear();
 
     void set_mute(bool mute);
@@ -65,6 +67,9 @@ public :
     int m_bits_per_sample = 0;
 
     bool m_is_created_audio_player = false;
+
+private:
+    volatile int64_t m_paused_position = -1;
 
 };
 

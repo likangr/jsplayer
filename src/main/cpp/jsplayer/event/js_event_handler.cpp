@@ -65,7 +65,7 @@ void JSEventHandler::call_on_info(int what, int arg1, int arg2) {
 }
 
 void JSEventHandler::call_on_completed() {
-    js_jni_get_env(NULL)->CallVoidMethod(m_js_player_obj, midOnCompleted);
+//    js_jni_get_env(NULL)->CallVoidMethod(m_js_player_obj, midOnCompleted);
 }
 
 void JSEventHandler::call_on_buffering(bool is_buffering) {
