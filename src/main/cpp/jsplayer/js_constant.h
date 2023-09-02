@@ -27,8 +27,8 @@ typedef int JS_RET;
 #define JS_ERR_CACHE_FRAME_FAILED                               JS_ERR-19
 
 /*io timeout*/
-#define DEFAULT_PREPARE_TIME_OUT_MICROSECONDS                   10000000//10s
-#define DEFAULT_READ_PKT_TIME_OUT_MICROSECONDS                  10000000//10s
+#define DEFAULT_PREPARE_TIME_OUT_MICROSECONDS                   10000000*2//20s
+#define DEFAULT_READ_PKT_TIME_OUT_MICROSECONDS                  10000000*6//1min
 #define NO_TIME_OUT_MICROSECONDS                                0
 
 /*buffer duration*/

@@ -150,6 +150,7 @@ void JSPlayer::destroy() {
 
 void JSPlayer::seek(int64_t timestamp) {
     LOGD("%s seek timestamp=%lld", __func__, timestamp);
+
 }
 
 JS_RET JSPlayer::find_stream_info() {
@@ -765,6 +766,7 @@ void *read_frame_thread(void *data) {
                 }
             }
 
+            js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
             break;
         }
 
