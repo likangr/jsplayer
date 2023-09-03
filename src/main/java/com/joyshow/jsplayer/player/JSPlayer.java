@@ -28,7 +28,6 @@ public class JSPlayer extends FrameLayout {
     private JSSurfaceView mJSRenderView;
     private long mNativePlayer;
     private final Handler mMainThreadHandler = new Handler();
-    private boolean mIsWantToPause = false;
 
     private OnPreparedListener mOnPreparedListener;
     private OnErrorListener mOnErrorListener;
@@ -290,9 +289,6 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void prepare() {
         checkDestroyedException(StackTraceInfo.getMethodName());
-        if (mIsWantToPause) {
-            mIsWantToPause = false;
-        }
         prepare(mNativePlayer);
     }
 
@@ -302,9 +298,6 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void play() {
         checkDestroyedException(StackTraceInfo.getMethodName());
-        if (mIsWantToPause) {
-            mIsWantToPause = false;
-        }
         if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
             Logger.w(TAG, "play is failed : player's status isn't PLAY_STATUS_PREPARED.");
             return;
@@ -320,7 +313,6 @@ public class JSPlayer extends FrameLayout {
     public synchronized void pause() {
         checkDestroyedException(StackTraceInfo.getMethodName());
         if (Constant.PLAY_STATUS_PLAYING != getPlayStatus()) {
-            mIsWantToPause = true;
             Logger.w(TAG, "pause is failed : player's status isn't PLAY_STATUS_PLAYING.");
             return;
         }
@@ -334,13 +326,6 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void resume() {
         checkDestroyedException(StackTraceInfo.getMethodName());
-        if (mIsWantToPause) {
-            if (Constant.PLAY_STATUS_PREPARED != getPlayStatus()) {
-                play();
-                return;
-            }
-            mIsWantToPause = false;
-        }
         if (Constant.PLAY_STATUS_PAUSED != getPlayStatus()) {
             Logger.w(TAG, "resume is failed : player's status isn't PLAY_STATUS_PAUSED.");
             return;
@@ -355,9 +340,6 @@ public class JSPlayer extends FrameLayout {
      */
     public synchronized void stop() {
         checkDestroyedException(StackTraceInfo.getMethodName());
-        if (mIsWantToPause) {
-            mIsWantToPause = false;
-        }
         if (getPlayStatus() > Constant.PLAY_STATUS_CREATED && getPlayStatus() < Constant.PLAY_STATUS_STOPPED) {
             stop(mNativePlayer);
         } else {
@@ -372,9 +354,6 @@ public class JSPlayer extends FrameLayout {
      * @return
      */
     public synchronized void reset() {
-        if (mIsWantToPause) {
-            mIsWantToPause = false;
-        }
         checkDestroyedException(StackTraceInfo.getMethodName());
         reset(mNativePlayer);
     }
@@ -388,11 +367,6 @@ public class JSPlayer extends FrameLayout {
         checkDestroyedException(StackTraceInfo.getMethodName());
         destroy(mNativePlayer);
         mNativePlayer = 0;
-    }
-
-
-    public boolean isWantToPause() {
-        return mIsWantToPause;
     }
 
     /**

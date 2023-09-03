@@ -66,9 +66,13 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "1.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "2.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "3.mp4");
-        mPlayer.setUrl(SDCARD_PATH + File.separator + "2.mp4");
-//        mPlayer.setUrl("http://hw-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "4.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "5.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "6.mp4");
+        mPlayer.setUrl("http://hw-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8");
 
 
         mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
@@ -143,10 +147,8 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         long duration = player.getDuration();
         mSBSeek.setMax((int) duration);
         mDuration.setText(sDF.format(duration));
-        if (!player.isWantToPause()) {
-            player.play();
-            startUpdateSeekbar();
-        }
+        player.play();
+        startUpdateSeekbar();
     }
 
     @Override

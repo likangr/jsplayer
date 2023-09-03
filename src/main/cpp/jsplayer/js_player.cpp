@@ -165,6 +165,10 @@ void JSPlayer::seek_to(int64_t position) {
         return;
     }
 
+    if (m_is_read_eof) {
+
+    }
+
 
 //
 //    if (m_cur_play_status == PLAY_STATUS_PLAYING) {
@@ -507,7 +511,7 @@ void JSPlayer::stop_prepare() {
 void JSPlayer::free_res() {
     LOGD("%s free_res...", __func__);
 
-    m_is_eof = false;
+    m_is_read_eof = false;
 
     m_video_stream_index = -1;
     m_audio_stream_index = -1;
@@ -776,7 +780,7 @@ void *read_frame_thread(void *data) {
             if (player->m_io_time_out != NO_TIME_OUT_MICROSECONDS) {
                 if (ret == AVERROR_EOF || avio_feof(format_ctx->pb)) {
 
-                    player->m_is_eof = true;
+                    player->m_is_read_eof = true;
 
                     if (player->m_has_audio_stream) {
 
@@ -1213,26 +1217,26 @@ void egl_buffer_queue_cb(void *data) {
         //video is slow than audio.
         if (diff < -100000) {
             //drop
-            LOGD("%s drop video frame diff=%lld", __func__, diff);
+            LOGD("%s [sync] drop video frame diff=%lld", __func__, diff);
             goto end;
         } else {
             //draw immediately.
-            LOGD("%s draw immediately diff=%lld", __func__, diff);
+            LOGD("%s [sync] draw immediately diff=%lld", __func__, diff);
         }
     } else {
         //audio is slow than video.
         int64_t delay = diff;
-        if (delay < 40000) {
-            if (player->m_last_video_pts != -1) {
-                delay = player->m_cur_video_pts - player->m_last_video_pts;
-            } else {
-                delay = player->m_frame_rate_duration == -1 ? delay
-                                                            : player->m_frame_rate_duration;
-            }
-        } else {
-            av_usleep(delay);
-        }
-        LOGD("%s delay=%lld,diff=%lld", __func__, delay, diff);
+//        if (diff < 40000) {
+//            if (player->m_last_video_pts != -1) {
+//                delay = player->m_cur_video_pts - player->m_last_video_pts;
+//            } else {
+//                delay = player->m_frame_rate_duration == -1 ? delay
+//                                                            : player->m_frame_rate_duration;
+//            }
+//        }
+        av_usleep(delay);
+
+        LOGD("%s [sync] delay=%lld,diff=%lld", __func__, delay, diff);
     }
     player->m_egl_renderer->render(frame);
     player->m_last_video_pts = player->m_cur_video_pts;
@@ -1362,15 +1366,20 @@ bool is_live(AVFormatContext *s) {
     if (!strcmp(s->iformat->name, "rtp")
         || !strcmp(s->iformat->name, "rtsp")
         || !strcmp(s->iformat->name, "sdp")
-        || !strcmp(s->iformat->name, "flv")) {
+        || !strcmp(s->iformat->name, "flv")
+        || !strncmp(s->iformat->name, "hls", 3)) {
         LOGD("%s s->iformat->name=%s", __func__, s->iformat->name);
-        return true;
+        goto judge_duration;
     }
 
     if (s->pb && (!strncmp(s->filename, "rtp:", 4)
                   || !strncmp(s->filename, "udp:", 4))) {
         LOGD("%s s->filename=%s", __func__, s->filename);
-        return true;
+        goto judge_duration;
     }
+
     return false;
+
+    judge_duration:
+    return s->duration == AV_NOPTS_VALUE;
 }
