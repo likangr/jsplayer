@@ -74,7 +74,7 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "sintel.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "寻梦环游记.mp4");
 //        mPlayer.setUrl(SDCARD_PATH + File.separator + "test4k.mp4");
-//        mPlayer.setUrl(SDCARD_PATH + File.separator + "2.mp4");
+//        mPlayer.setUrl(SDCARD_PATH + File.separator + "3.mp4");
         mPlayer.setUrl("http://hw-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8");
 
 

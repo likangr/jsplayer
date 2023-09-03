@@ -767,7 +767,6 @@ void *read_frame_thread(void *data) {
                 }
             }
 
-            js_event_handler->call_on_error(JS_ERR_READ_FRAME_FAILED, 0, 0);
             break;
         }
 
