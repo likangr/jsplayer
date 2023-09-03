@@ -6,15 +6,20 @@ import android.app.Activity;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.SeekBar;
+import android.widget.TextView;
 
 import com.joyshow.jsplayer.player.JSPlayer;
 import com.joyshow.jsplayer.utils.Logger;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.TimeZone;
 
 /**
  * @author likangren
@@ -24,11 +29,14 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     private final String TAG = "SimpleVideoActivity";
 
     private static final String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
+    @SuppressLint("SimpleDateFormat")
+    private static final SimpleDateFormat sDF = new SimpleDateFormat("HH:mm:ss");
 
     static {
         JSPlayer.setLoggable(true);
 //        JSPlayer.setIsWriteLogToFile(false);
         JSPlayer.setLogFileSavePath(SDCARD_PATH + File.separator + "simple_video_activity_log.txt");
+        sDF.setTimeZone(TimeZone.getTimeZone("GMT"));
     }
 
     private JSPlayer mPlayer;
@@ -37,7 +45,12 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     private Button mBtnStop;
     private ProgressBar mProgressBar;
     private SeekBar mSBSeek;
+    private TextView mCurrentPosition;
+    private TextView mDuration;
 
+    private static final Handler sHandler = new Handler(Looper.getMainLooper());
+
+    @SuppressLint("DefaultLocale")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -79,6 +92,9 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         mProgressBar = findViewById(R.id.progress_bar);
         mSBSeek = findViewById(R.id.sb_seek);
         mSBSeek.setOnSeekBarChangeListener(this);
+
+        mCurrentPosition = findViewById(R.id.tv_current_position);
+        mDuration = findViewById(R.id.tv_duration);
     }
 
     @Override
@@ -124,9 +140,12 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
 
     @Override
     public void onPrepared(JSPlayer player) {
-        mSBSeek.setMax((int) player.getDuration());
+        long duration = player.getDuration();
+        mSBSeek.setMax((int) duration);
+        mDuration.setText(sDF.format(duration));
         if (!player.isWantToPause()) {
             player.play();
+            startUpdateSeekbar();
         }
     }
 
@@ -140,12 +159,14 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     protected void onResume() {
         super.onResume();
         mPlayer.resume();
+        startUpdateSeekbar();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         mPlayer.pause();
+        stopUpdateSeekbar();
     }
 
     @Override
@@ -172,5 +193,23 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
         mPlayer.seekTo(seekBar.getProgress());
+    }
+
+    private void startUpdateSeekbar() {
+        stopUpdateSeekbar();
+        sHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                long currentPosition = mPlayer.getCurrentPosition();
+                mSBSeek.setProgress((int) currentPosition);
+                mCurrentPosition.setText(sDF.format(currentPosition));
+                sHandler.postDelayed(this, 1000);
+            }
+        });
+    }
+
+
+    private void stopUpdateSeekbar() {
+        sHandler.removeCallbacksAndMessages(null);
     }
 }

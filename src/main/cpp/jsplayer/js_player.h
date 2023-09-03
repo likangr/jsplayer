@@ -190,7 +190,7 @@ public:
 //    int m_av_sync_type = AV_SYNC_AUDIO_MASTER;
     int64_t m_frame_rate_duration = -1;
     double m_frame_rate = -1.0;
-    int64_t m_cur_video_pts = -1;
+    volatile int64_t m_cur_video_pts = -1;
     volatile int64_t m_cur_audio_pts = -1;
     int64_t m_last_video_pts = -1;
     int64_t m_first_video_pts = -1;
@@ -198,8 +198,8 @@ public:
     volatile bool m_is_video_buffering = false;
     volatile bool m_is_audio_buffering = false;
 
-    pthread_mutex_t m_mutex0, *m_mutex = &m_mutex0;
-    pthread_cond_t m_cond0, *m_cond = &m_cond0;
+    pthread_mutex_t m_video_buffering_mutex0, *m_video_buffering_mutex = &m_video_buffering_mutex0;
+    pthread_cond_t m_video_buffering_cond0, *m_video_buffering_cond = &m_video_buffering_cond0;
 
 };
 

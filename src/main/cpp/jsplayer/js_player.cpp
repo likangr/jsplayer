@@ -25,8 +25,8 @@ JSPlayer::JSPlayer(jobject java_js_player) {
     m_js_media_decoder = new JSMediaDecoder(m_js_event_handler);
     m_js_media_converter = new JSMediaCoverter();
 
-    pthread_mutex_init(m_mutex, NULL);
-    pthread_cond_init(m_cond, NULL);
+    pthread_mutex_init(m_video_buffering_mutex, NULL);
+    pthread_cond_init(m_video_buffering_cond, NULL);
 
     m_cur_play_status = PLAY_STATUS_CREATED;
 }
@@ -46,8 +46,8 @@ JSPlayer::~JSPlayer() {
     delete m_js_event_handler;
     delete m_js_media_converter;
 
-    pthread_mutex_destroy(m_mutex);
-    pthread_cond_destroy(m_cond);
+    pthread_mutex_destroy(m_video_buffering_mutex);
+    pthread_cond_destroy(m_video_buffering_cond);
 }
 
 void JSPlayer::prepare() {
@@ -155,15 +155,17 @@ int64_t JSPlayer::get_duration() {
 }
 
 int64_t JSPlayer::get_current_position() {
-    return LK_NO_TIME_VALUE;
+    return (int64_t) ((double) m_cur_video_pts / LK_USER_TIME_BASE);
 }
 
 void JSPlayer::seek_to(int64_t position) {
     LOGD("%s seek to position=%lld ...", __func__, position);
     if (m_is_live) {
-        LOGD("%s live don't allow seek.", __func__);
+        LOGW("%s live don't allow seek.", __func__);
         return;
     }
+
+
 //
 //    if (m_cur_play_status == PLAY_STATUS_PLAYING) {
 //
@@ -448,7 +450,7 @@ void JSPlayer::pause_play() {
     }
     if (m_has_audio_stream) {
         m_audio_decoded_que->abort_get();
-        pthread_cond_signal(m_cond);
+        pthread_cond_signal(m_video_buffering_cond);
         LOGD("%s stop_play stop play audio step1.", __func__);
         while (m_is_audio_data_consuming) {
             av_usleep(1);
@@ -480,7 +482,7 @@ void JSPlayer::stop_play() {
         m_audio_cached_que->abort_get();
         m_audio_decoded_que->abort_get();
         m_audio_decoded_que->abort_put();
-        pthread_cond_signal(m_cond);
+        pthread_cond_signal(m_video_buffering_cond);
         LOGD("%s stop_play stop decode audio step1.", __func__);
         pthread_join(m_decode_audio_tid, NULL);
         LOGD("%s stop_play stop decode audio step2.", __func__);
@@ -585,7 +587,7 @@ void JSPlayer::set_is_intercept_audio(bool is_intercept_audio) {
     }
 
     //replay audio use new engine.
-    pthread_cond_signal(m_cond);
+    pthread_cond_signal(m_video_buffering_cond);
     LOGD("%s stop play audio step1.", __func__);
     m_audio_decoded_que->abort_get();
     LOGD("%s stop play audio step2.", __func__);
@@ -1146,7 +1148,7 @@ void opensles_buffer_queue_cb(SLAndroidSimpleBufferQueueItf caller, void *data) 
         goto end;
     }
     if (player->m_is_video_buffering) {
-        pthread_cond_wait(player->m_cond, player->m_mutex);
+        pthread_cond_wait(player->m_video_buffering_cond, player->m_video_buffering_mutex);
     }
     frame = player->m_audio_decoded_que->get();
     if (frame == NULL) {
@@ -1303,7 +1305,7 @@ void video_decoded_que_buffering_callback(void *data, bool is_buffering) {
     if (is_buffering) {
         LOGD("%s start buffering video frame.", __func__);
     } else {
-        pthread_cond_signal(player->m_cond);
+        pthread_cond_signal(player->m_video_buffering_cond);
         LOGD("%s stop buffering video frame.", __func__);
     }
     player->m_js_event_handler->call_on_buffering(is_buffering);
@@ -1317,7 +1319,7 @@ void consume_audio_data_by_interceptor(JSPlayer *player) {
     player->m_is_audio_data_consuming = true;
     while (player->m_is_playing) {
         if (player->m_is_video_buffering) {
-            pthread_cond_wait(player->m_cond, player->m_mutex);
+            pthread_cond_wait(player->m_video_buffering_cond, player->m_video_buffering_mutex);
         }
         frame = player->m_audio_decoded_que->get();
         if (frame == NULL) {

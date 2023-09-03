@@ -480,7 +480,7 @@ void JSEglRenderer::create_surface(jobject surface) {
 
 //void JSEglRenderer::window_size_changed(int width, int height) {
 //
-//    pthread_mutex_lock(m_mutex);
+//    pthread_mutex_lock(m_video_buffering_mutex);
 //    LOGD("%s m_is_window_size_changed m_window_width=%d,m_window_height=%d,width=%d,height=%d",
 //       __func__,
 //          m_window_width,
@@ -488,14 +488,14 @@ void JSEglRenderer::create_surface(jobject surface) {
 //         width,
 //         height);
 //    if (m_window_width == width && m_window_height == height) {
-//        pthread_mutex_unlock(m_mutex);
+//        pthread_mutex_unlock(m_video_buffering_mutex);
 //        return;
 //    }
 //    m_is_window_size_changed = true;
 //    m_window_width = width;
 //    m_window_height = height;
 //
-//    pthread_mutex_unlock(m_mutex);
+//    pthread_mutex_unlock(m_video_buffering_mutex);
 //}
 
 
