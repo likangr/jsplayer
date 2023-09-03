@@ -149,13 +149,13 @@ void JSPlayer::destroy() {
 
 int64_t JSPlayer::get_duration() {
     if (m_format_ctx->duration == AV_NOPTS_VALUE) {
-        return -1;
+        return LK_NO_TIME_VALUE;
     }
     return (int64_t) ((double) m_format_ctx->duration / LK_USER_TIME_BASE);
 }
 
 int64_t JSPlayer::get_current_position() {
-    return -1;
+    return LK_NO_TIME_VALUE;
 }
 
 void JSPlayer::seek_to(int64_t timestamp) {
