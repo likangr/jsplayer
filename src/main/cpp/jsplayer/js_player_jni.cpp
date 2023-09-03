@@ -43,7 +43,9 @@ static JNINativeMethod js_player_methods[] = {
         {"getVolume",                                       "(J)I",                                     (jint *) get_volume},
         {"setChannelMute",                                  "(JIZ)V",                                   (void *) set_channel_mute},
         {"getPlayStatus",                                   "(J)I",                                     (jint *) get_play_status},
-        {"seek",                                            "(JJ)I",                                    (void *) seek},
+        {"getDuration",                                     "(J)J",                                     (jlong *) get_duration},
+        {"getCurrentPosition",                              "(J)J",                                     (jlong *) get_current_position},
+        {"seekTo",                                          "(JJ)V",                                    (void *) seek_to},
         {"interceptPcmData",                                "(JZ)V",                                    (void *) intercept_audio},
         {"parseDataFromVideoPacket",                        "(JZ)V",                                    (void *) parse_data_from_video_packet},
         {"setNativeInterceptedPcmDataCallbackHandle",       "(JJ)V",                                    (void *) set_native_intercepted_pcm_data_callback_handle},
@@ -340,10 +342,23 @@ int JS_JNI_CALL get_play_status(JNIEnv *env, jobject obj, jlong handle) {
     return player->m_cur_play_status;
 }
 
-void JS_JNI_CALL seek(JNIEnv *env, jobject obj, jlong handle, jlong timestamp) {
+jlong JS_JNI_CALL get_duration(JNIEnv *env, jobject obj, jlong handle) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    player->seek(timestamp);
+    return player->get_duration();
+}
+
+jlong JS_JNI_CALL get_current_position(JNIEnv *env, jobject obj, jlong handle) {
+
+    JSPlayer *player = (JSPlayer *) handle;
+    return player->get_current_position();
+}
+
+
+void JS_JNI_CALL seek_to(JNIEnv *env, jobject obj, jlong handle, jlong timestamp) {
+
+    JSPlayer *player = (JSPlayer *) handle;
+    player->seek_to(timestamp);
 }
 
 void JS_JNI_CALL register_js_player_methods(JNIEnv *env) {

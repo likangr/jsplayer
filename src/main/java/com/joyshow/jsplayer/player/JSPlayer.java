@@ -363,7 +363,6 @@ public class JSPlayer extends FrameLayout {
         } else {
             Logger.w(TAG, "stop is failed : player's status is " + getPlayStatus() + ".");
         }
-
     }
 
     /**
@@ -378,7 +377,6 @@ public class JSPlayer extends FrameLayout {
         }
         checkDestroyedException(StackTraceInfo.getMethodName());
         reset(mNativePlayer);
-
     }
 
     /**
@@ -498,13 +496,53 @@ public class JSPlayer extends FrameLayout {
     }
 
     /**
+     * get total duration.
+     *
+     * @return duration in millisecond.
+     */
+    public synchronized long getDuration() {
+        checkDestroyedException(StackTraceInfo.getMethodName());
+        if (getPlayStatus() > Constant.PLAY_STATUS_PREPARING
+                && getPlayStatus() < Constant.PLAY_STATUS_STOPPED) {
+            return getDuration(mNativePlayer);
+        } else {
+            Logger.w(TAG, "getDuration is failed :" +
+                    " player's status is " + getPlayStatus() + ".");
+            return -1;
+        }
+    }
+
+    /**
+     * get total duration.
+     *
+     * @return duration in millisecond.
+     */
+    public synchronized long getCurrentPosition() {
+        checkDestroyedException(StackTraceInfo.getMethodName());
+        if (getPlayStatus() > Constant.PLAY_STATUS_PREPARING
+                && getPlayStatus() < Constant.PLAY_STATUS_STOPPED) {
+            return getCurrentPosition(mNativePlayer);
+        } else {
+            Logger.w(TAG, "getCurrentPosition is failed :" +
+                    " player's status is " + getPlayStatus() + ".");
+            return -1;
+        }
+    }
+
+    /**
      * seek.
      *
      * @param timestamp in millisecond.
      */
-    public synchronized void seek(long timestamp) {
+    public synchronized void seekTo(long timestamp) {
         checkDestroyedException(StackTraceInfo.getMethodName());
-        seek(mNativePlayer, timestamp);
+        if (Constant.PLAY_STATUS_PLAYING != getPlayStatus()
+                && Constant.PLAY_STATUS_PAUSED != getPlayStatus()) {
+            Logger.w(TAG, "seek is failed : player's status isn't" +
+                    " player's status is " + getPlayStatus() + ".");
+            return;
+        }
+        seekTo(mNativePlayer, timestamp);
     }
 
     /**
@@ -528,7 +566,8 @@ public class JSPlayer extends FrameLayout {
     }
 
     /**
-     * if invoke this func, will be preferred to use callbackHandle,ignore  {@link #mOnInterceptedPcmDataCallback}
+     * if invoke this func, will be preferred to use callbackHandle,
+     * ignore {@link #mOnInterceptedPcmDataCallback}
      *
      * @param callbackHandle
      */
@@ -619,7 +658,8 @@ public class JSPlayer extends FrameLayout {
      */
     private void onInterceptedPcmData(short[] pcmData, int sampleNum, int channelNum) {
         if (mOnInterceptedPcmDataCallback != null) {
-            mOnInterceptedPcmDataCallback.onInterceptedPcmData(JSPlayer.this, pcmData, sampleNum, channelNum);
+            mOnInterceptedPcmDataCallback.onInterceptedPcmData(
+                    JSPlayer.this, pcmData, sampleNum, channelNum);
         }
     }
 
@@ -821,7 +861,11 @@ public class JSPlayer extends FrameLayout {
 
     private native int getPlayStatus(long handle);
 
-    private native int seek(long handle, long timestamp);
+    private native long getDuration(long handle);
+
+    private native long getCurrentPosition(long handle);
+
+    private native void seekTo(long handle, long timestamp);
 
     private native void interceptPcmData(long handle, boolean isInterceptPcmData);
 

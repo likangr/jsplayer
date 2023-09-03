@@ -73,7 +73,11 @@ set_channel_mute(JNIEnv *env, jobject obj, jlong handle, jint channel, jboolean 
 
 jint JS_JNI_CALL get_play_status(JNIEnv *env, jobject obj, jlong handle);
 
-void JS_JNI_CALL seek(JNIEnv *env, jobject obj, jlong handle, jlong timestamp);
+jlong JS_JNI_CALL get_duration(JNIEnv *env, jobject obj, jlong handle);
+
+jlong JS_JNI_CALL get_current_position(JNIEnv *env, jobject obj, jlong handle);
+
+void JS_JNI_CALL seek_to(JNIEnv *env, jobject obj, jlong handle, jlong timestamp);
 
 void JS_JNI_CALL intercept_audio(JNIEnv *env, jobject obj, jlong handle, jboolean is_intercept);
 

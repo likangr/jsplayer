@@ -41,7 +41,11 @@ public:
 
     void destroy();
 
-    void seek(int64_t timestamp);
+    int64_t get_duration();
+
+    int64_t get_current_position();
+
+    void seek_to(int64_t timestamp);
 
     /*prepare*/
 

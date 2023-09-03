@@ -147,10 +147,40 @@ void JSPlayer::destroy() {
     LOGD("%s destroyed.", __func__);
 }
 
+int64_t JSPlayer::get_duration() {
+    if (m_format_ctx->duration == AV_NOPTS_VALUE) {
+        return -1;
+    }
+    return (int64_t) ((double) m_format_ctx->duration / 1000);
+}
 
-void JSPlayer::seek(int64_t timestamp) {
-    LOGD("%s seek timestamp=%lld", __func__, timestamp);
+int64_t JSPlayer::get_current_position() {
+    return -1;
+}
 
+void JSPlayer::seek_to(int64_t timestamp) {
+    LOGD("%s seek timestamp=%lld ...", __func__, timestamp);
+    if (m_is_live) {
+        LOGD("%s live don't allow seek.", __func__);
+        return;
+    }
+//
+//    if (m_cur_play_status == PLAY_STATUS_PLAYING) {
+//
+//    } else if (m_cur_play_status == PLAY_STATUS_PAUSED) {
+//
+//    }
+
+
+
+
+
+    /**
+     * 1.pause play
+     * 2.judge is need av_seek_frame
+     * 3.seek cache packet
+     * 4.seek decode frame.
+     */
 }
 
 JS_RET JSPlayer::find_stream_info() {
@@ -743,6 +773,8 @@ void *read_frame_thread(void *data) {
 
             if (player->m_io_time_out != NO_TIME_OUT_MICROSECONDS) {
                 if (ret == AVERROR_EOF || avio_feof(format_ctx->pb)) {
+
+                    player->m_is_eof = true;
 
                     if (player->m_has_audio_stream) {
 
