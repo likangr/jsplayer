@@ -158,8 +158,8 @@ int64_t JSPlayer::get_current_position() {
     return LK_NO_TIME_VALUE;
 }
 
-void JSPlayer::seek_to(int64_t timestamp) {
-    LOGD("%s seek timestamp=%lld ...", __func__, timestamp);
+void JSPlayer::seek_to(int64_t position) {
+    LOGD("%s seek to position=%lld ...", __func__, position);
     if (m_is_live) {
         LOGD("%s live don't allow seek.", __func__);
         return;

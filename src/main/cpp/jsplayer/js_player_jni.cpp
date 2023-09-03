@@ -355,10 +355,10 @@ jlong JS_JNI_CALL get_current_position(JNIEnv *env, jobject obj, jlong handle) {
 }
 
 
-void JS_JNI_CALL seek_to(JNIEnv *env, jobject obj, jlong handle, jlong timestamp) {
+void JS_JNI_CALL seek_to(JNIEnv *env, jobject obj, jlong handle, jlong position) {
 
     JSPlayer *player = (JSPlayer *) handle;
-    player->seek_to(timestamp);
+    player->seek_to(position);
 }
 
 void JS_JNI_CALL register_js_player_methods(JNIEnv *env) {

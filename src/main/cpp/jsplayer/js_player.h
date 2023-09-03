@@ -45,7 +45,7 @@ public:
 
     int64_t get_current_position();
 
-    void seek_to(int64_t timestamp);
+    void seek_to(int64_t position);
 
     /*prepare*/
 

@@ -532,9 +532,9 @@ public class JSPlayer extends FrameLayout {
     /**
      * seek.
      *
-     * @param timestamp in millisecond.
+     * @param position timestamp in millisecond.
      */
-    public synchronized void seekTo(long timestamp) {
+    public synchronized void seekTo(long position) {
         checkDestroyedException(StackTraceInfo.getMethodName());
         if (Constant.PLAY_STATUS_PLAYING != getPlayStatus()
                 && Constant.PLAY_STATUS_PAUSED != getPlayStatus()) {
@@ -542,7 +542,7 @@ public class JSPlayer extends FrameLayout {
                     " player's status is " + getPlayStatus() + ".");
             return;
         }
-        seekTo(mNativePlayer, timestamp);
+        seekTo(mNativePlayer, position);
     }
 
     /**
@@ -865,7 +865,7 @@ public class JSPlayer extends FrameLayout {
 
     private native long getCurrentPosition(long handle);
 
-    private native void seekTo(long handle, long timestamp);
+    private native void seekTo(long handle, long position);
 
     private native void interceptPcmData(long handle, boolean isInterceptPcmData);
 
