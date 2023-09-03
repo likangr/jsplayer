@@ -59,4 +59,6 @@ typedef int JS_RET;
 #define JS_OPTION_DECODER_TYPE_SW                               "decoder_type_sw"
 #define JS_OPTION_DECODER_TYPE_AUTO                             "decoder_type_auto"
 
+#define LK_USER_TIME_BASE                                       1000//1ms
+
 #endif //JS_CONSTANT_H

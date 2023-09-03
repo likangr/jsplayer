@@ -151,7 +151,7 @@ int64_t JSPlayer::get_duration() {
     if (m_format_ctx->duration == AV_NOPTS_VALUE) {
         return -1;
     }
-    return (int64_t) ((double) m_format_ctx->duration / 1000);
+    return (int64_t) ((double) m_format_ctx->duration / LK_USER_TIME_BASE);
 }
 
 int64_t JSPlayer::get_current_position() {
@@ -380,7 +380,7 @@ JS_RET JSPlayer::prepare_video() {
     AVRational frame_rate = av_guess_frame_rate(m_format_ctx, m_video_stream, NULL);
     if (frame_rate.den && frame_rate.num) {
         m_frame_rate_duration =
-                (int64_t) (av_q2d((AVRational) {frame_rate.den, frame_rate.num}) * 1000000);
+                (int64_t) (av_q2d((AVRational) {frame_rate.den, frame_rate.num}) * AV_TIME_BASE);
         m_frame_rate = av_q2d(frame_rate);
     }
     LOGD("%s frame_rate.den=%d,frame_rate.num=%d,m_frame_rate=%f,m_frame_rate_duration=%lld",
@@ -1192,7 +1192,7 @@ void egl_buffer_queue_cb(void *data) {
     }
 
     int64_t video_position = (int64_t) (frame->pts * av_q2d(player->m_video_stream->time_base) *
-                                        1000000);
+                                        AV_TIME_BASE);
     if (player->m_first_video_pts == -1) {
         player->m_first_video_pts = video_position;
         player->m_cur_video_pts = 0;
