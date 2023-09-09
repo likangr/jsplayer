@@ -235,6 +235,16 @@ JS_RET JSPlayer::find_stream_info() {
     LOGD("%s m_is_live=%d", __func__, m_is_live);
 
     if (m_is_live) {//todo can set  value in another func?
+        AVDictionaryEntry *entry_live_media_delay_mode
+                = av_dict_get(m_options, LK_OPTION_LIVE_MEDIA_DELAY_MODE,
+                              NULL, AV_DICT_IGNORE_SUFFIX);
+        if (entry_live_media_delay_mode) {
+            if (!strcmp(entry_live_media_delay_mode->value,
+                        LK_OPTION_LIVE_MEDIA_DELAY_MODE_REAL_TIME)) {
+                m_is_live_media_real_time_first = true;
+            }
+        }
+
         if (m_min_cached_duration == -1) {
             m_min_cached_duration = DEFAULT_MIN_CACHED_DURATION_LIVE;
         }
@@ -247,7 +257,6 @@ JS_RET JSPlayer::find_stream_info() {
         if (m_max_decoded_duration == -1) {
             m_max_decoded_duration = DEFAULT_MAX_DECODED_DURATION_LIVE;
         }
-
     } else {
         if (m_min_cached_duration == -1) {
             m_min_cached_duration = DEFAULT_MIN_CACHED_DURATION_RECORD;
@@ -263,15 +272,18 @@ JS_RET JSPlayer::find_stream_info() {
         }
     }
 
-    LOGD("%s duration threshold ：m_min_cached_duration=%lld,"
+    LOGD("%s duration threshold ："
+         "m_min_cached_duration=%lld,"
          "m_max_cached_duration=%lld,"
          "m_min_decoded_duration=%lld,"
-         "m_max_decoded_duration=%lld",
+         "m_max_decoded_duration=%lld,"
+         "m_is_live_media_real_time_first=%d",
          __func__,
          m_min_cached_duration,
          m_max_cached_duration,
          m_min_decoded_duration,
-         m_max_decoded_duration);
+         m_max_decoded_duration,
+         m_is_live_media_real_time_first);
 
     LOGD("%s find_stream_info finish.", __func__);
 
@@ -315,7 +327,8 @@ JS_RET JSPlayer::prepare_audio() {
                                            m_audio_stream->time_base,
                                            m_min_cached_duration,
                                            m_max_cached_duration,
-                                           m_is_live);
+                                           m_is_live,
+                                           m_is_live_media_real_time_first);
 
     m_audio_cached_que->set_clear_callback(audio_cached_que_clear_callback, this);
     m_audio_cached_que->set_buffering_callback(audio_cached_que_buffering_callback, this);
@@ -325,7 +338,8 @@ JS_RET JSPlayer::prepare_audio() {
                                            m_audio_stream->time_base,
                                            m_min_decoded_duration,
                                            m_max_decoded_duration,
-                                           m_is_live);
+                                           m_is_live,
+                                           m_is_live_media_real_time_first);
 
     m_audio_decoded_que->set_clear_callback(audio_decoded_que_clear_callback, this);
     m_audio_cached_que->set_buffering_callback(audio_decoded_que_buffering_callback, this);
@@ -357,7 +371,8 @@ JS_RET JSPlayer::prepare_video() {
                                            m_video_stream->time_base,
                                            m_min_cached_duration,
                                            m_max_cached_duration,
-                                           m_is_live);
+                                           m_is_live,
+                                           m_is_live_media_real_time_first);
 
     m_video_cached_que->set_clear_callback(video_cached_que_clear_callback, this);
     m_video_cached_que->set_buffering_callback(video_cached_que_buffering_callback, this);
@@ -366,7 +381,8 @@ JS_RET JSPlayer::prepare_video() {
                                            m_video_stream->time_base,
                                            m_min_decoded_duration,
                                            m_max_decoded_duration,
-                                           m_is_live);
+                                           m_is_live,
+                                           m_is_live_media_real_time_first);
 
     m_video_decoded_que->set_clear_callback(video_decoded_que_clear_callback, this);
     m_video_decoded_que->set_buffering_callback(video_decoded_que_buffering_callback, this);
@@ -528,6 +544,8 @@ void JSPlayer::free_res() {
     m_max_cached_duration = -1;
     m_min_decoded_duration = -1;
     m_max_decoded_duration = -1;
+
+    m_is_live_media_real_time_first = false;
 
     m_frame_rate_duration = -1;
     m_frame_rate = -1.0;

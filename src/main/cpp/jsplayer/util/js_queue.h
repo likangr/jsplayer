@@ -27,8 +27,8 @@ template<class T>
 class JSQueue {
 public:
 
-    JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration, int64_t max_duration,
-            bool is_live);
+    JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration,
+            int64_t max_duration, bool is_live, bool is_live_media_real_time_first);
 
     virtual  ~JSQueue();
 
@@ -72,7 +72,8 @@ public:
     AVRational m_time_base;
     int64_t m_min_duration = -1;
     int64_t m_max_duration = -1;
-    bool m_is_live;
+    bool m_is_live = false;
+    bool m_is_live_media_real_time_first = false;
 
     int64_t m_buffer_duration = 0;
 
@@ -88,8 +89,7 @@ public:
 
 template<class T>
 JSQueue<T>::JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration,
-                    int64_t max_duration,
-                    bool is_live) {
+                    int64_t max_duration, bool is_live, bool is_live_media_real_time_first) {
 
     pthread_mutexattr_settype(m_mutexattr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(m_mutex, m_mutexattr);
@@ -100,6 +100,7 @@ JSQueue<T>::JSQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_dur
     m_min_duration = min_duration;
     m_max_duration = max_duration;
     m_is_live = is_live;
+    m_is_live_media_real_time_first = is_live_media_real_time_first;
 }
 
 
@@ -174,11 +175,13 @@ public:
     AVPacket m_eof_pkt0, *m_eof_pkt = &m_eof_pkt0;
 
     JSPacketQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration,
-                  int64_t max_duration, bool is_live) : JSQueue<AVPacket *>(queue_type,
-                                                                            time_base,
-                                                                            min_duration,
-                                                                            max_duration,
-                                                                            is_live) {
+                  int64_t max_duration, bool is_live, bool is_live_media_real_time_first)
+            : JSQueue<AVPacket *>(queue_type,
+                                  time_base,
+                                  min_duration,
+                                  max_duration,
+                                  is_live,
+                                  is_live_media_real_time_first) {
 
 
         if (m_queue_type == QUEUE_TYPE_VIDEO) {
@@ -377,22 +380,29 @@ public:
         int64_t duration = get_duration();
 
         if (duration >= m_max_duration) {
-
-            if (is_eof_avpkt) {
-                clear(true);
-            } else {
-                clear(false);
-                if (JS_OK != put_flush_avpkt()) {
-                    LOGE("%s can't put video flush packet.", __func__);
-                    pthread_mutex_unlock(m_mutex);
-                    return JS_ERR;
+            if (m_is_live_media_real_time_first) {
+                if (is_eof_avpkt) {
+                    clear(true);
+                } else {
+                    clear(false);
+                    if (JS_OK != put_flush_avpkt()) {
+                        LOGE("%s can't put video flush packet.", __func__);
+                        pthread_mutex_unlock(m_mutex);
+                        return JS_ERR;
+                    }
                 }
+                if (m_is_waiting_for_reach_min_duration) {
+                    pthread_cond_signal(m_cond);
+                    m_is_waiting_for_reach_min_duration = false;
+                }
+            } else {
+                if (m_is_aborted_put) {
+                    pthread_mutex_unlock(m_mutex);
+                    return JS_OK;
+                }
+                m_is_waiting_for_insufficient_max_duration = true;
+                pthread_cond_wait(m_cond, m_mutex);
             }
-            if (m_is_waiting_for_reach_min_duration) {
-                pthread_cond_signal(m_cond);
-                m_is_waiting_for_reach_min_duration = false;
-            }
-
         } else if (m_is_waiting_for_reach_min_duration && (
                 duration >= m_min_duration || is_signal_avpkt)) {
             pthread_cond_signal(m_cond);
@@ -428,19 +438,28 @@ public:
         }
 
         if (duration >= m_max_duration) {
-            if (is_eof_avpkt) {
-                clear(true);
-            } else {
-                clear(false);
-                if (JS_OK != put_flush_avpkt()) {
-                    LOGE("%s can't put video flush packet.", __func__);
-                    pthread_mutex_unlock(m_mutex);
-                    return JS_ERR;
+            if (m_is_live_media_real_time_first) {
+                if (is_eof_avpkt) {
+                    clear(true);
+                } else {
+                    clear(false);
+                    if (JS_OK != put_flush_avpkt()) {
+                        LOGE("%s can't put video flush packet.", __func__);
+                        pthread_mutex_unlock(m_mutex);
+                        return JS_ERR;
+                    }
                 }
-            }
-            if (m_is_waiting_for_reach_min_duration) {
-                pthread_cond_signal(m_cond);
-                m_is_waiting_for_reach_min_duration = false;
+                if (m_is_waiting_for_reach_min_duration) {
+                    pthread_cond_signal(m_cond);
+                    m_is_waiting_for_reach_min_duration = false;
+                }
+            } else {
+                if (m_is_aborted_put) {
+                    pthread_mutex_unlock(m_mutex);
+                    return JS_OK;
+                }
+                m_is_waiting_for_insufficient_max_duration = true;
+                pthread_cond_wait(m_cond, m_mutex);
             }
         } else if (m_is_waiting_for_reach_min_duration &&
                    (duration >= m_min_duration || is_signal_avpkt)) {
@@ -512,11 +531,13 @@ public:
 class JSFrameQueue : public JSQueue<AVFrame *> {
 public:
     JSFrameQueue(QUEUE_TYPE queue_type, AVRational time_base, int64_t min_duration,
-                 int64_t max_duration, bool is_live) : JSQueue<AVFrame *>(queue_type,
-                                                                          time_base,
-                                                                          min_duration,
-                                                                          max_duration,
-                                                                          is_live) {
+                 int64_t max_duration, bool is_live, bool is_live_media_real_time_first)
+            : JSQueue<AVFrame *>(queue_type,
+                                 time_base,
+                                 min_duration,
+                                 max_duration,
+                                 is_live,
+                                 is_live_media_real_time_first) {
 
         if (m_is_live) {
             put = (JS_RET(JSQueue<AVFrame *>::*)(AVFrame *)) &JSFrameQueue::put_live_frame;
@@ -654,7 +675,16 @@ public:
         int64_t duration = get_duration();
 
         if (duration >= m_max_duration) {
-            clear(false);
+            if (m_is_live_media_real_time_first) {
+                clear(false);
+            } else {
+                if (m_is_aborted_put) {
+                    pthread_mutex_unlock(m_mutex);
+                    return JS_OK;
+                }
+                m_is_waiting_for_insufficient_max_duration = true;
+                pthread_cond_wait(m_cond, m_mutex);
+            }
         } else if (m_is_waiting_for_reach_min_duration && duration >= m_min_duration) {
             pthread_cond_signal(m_cond);
             m_is_waiting_for_reach_min_duration = false;

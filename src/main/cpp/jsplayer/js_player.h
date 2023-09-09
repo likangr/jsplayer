@@ -165,6 +165,7 @@ public:
     int64_t m_min_decoded_duration = -1;
     int64_t m_max_decoded_duration = -1;
 
+    bool m_is_live_media_real_time_first = false;
 
     volatile bool m_is_playing = false;
     volatile bool m_is_buffering = false;

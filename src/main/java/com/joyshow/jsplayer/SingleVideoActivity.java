@@ -25,7 +25,7 @@ import java.util.TimeZone;
  * @author likangren
  * simple video.
  */
-public class SimpleVideoActivity extends Activity implements View.OnClickListener, JSPlayer.OnErrorListener, JSPlayer.OnPreparedListener, JSPlayer.OnInfoListener, JSPlayer.OnCompletedListener, JSPlayer.OnBufferingListener, SeekBar.OnSeekBarChangeListener {
+public class SingleVideoActivity extends Activity implements View.OnClickListener, JSPlayer.OnErrorListener, JSPlayer.OnPreparedListener, JSPlayer.OnInfoListener, JSPlayer.OnCompletedListener, JSPlayer.OnBufferingListener, SeekBar.OnSeekBarChangeListener {
     private final String TAG = "SimpleVideoActivity";
 
     private static final String SDCARD_PATH = Environment.getExternalStorageDirectory().getAbsolutePath();
@@ -54,12 +54,14 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_simple_video);
+        setContentView(R.layout.activity_single_video);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            requestPermissions(new String[]{Manifest.permission.MANAGE_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            requestPermissions(new String[]{Manifest.permission.MANAGE_EXTERNAL_STORAGE,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
                     Manifest.permission.READ_EXTERNAL_STORAGE}, 1000);
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, 1000);
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE}, 1000);
         }
 
         mPlayer = findViewById(R.id.jsplayer);
@@ -75,6 +77,8 @@ public class SimpleVideoActivity extends Activity implements View.OnClickListene
         mPlayer.setUrl("http://hw-m-l.cztv.com/channels/lantian/channel008/1080p.m3u8");
 
 
+        mPlayer.setOption(Constant.LK_OPTION_LIVE_MEDIA_DELAY_MODE,
+                Constant.LK_OPTION_LIVE_MEDIA_DELAY_MODE_FLUENCY);
         mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_AUTO);
 //        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_SW);
 //        mPlayer.setOption(Constant.JS_OPTION_DECODER_TYPE, Constant.JS_OPTION_DECODER_TYPE_HW);
